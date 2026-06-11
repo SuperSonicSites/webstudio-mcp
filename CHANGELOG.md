@@ -5,6 +5,22 @@ privately before its first public release, so the history below starts at the fi
 public version. Format inspired by [Keep a Changelog](https://keepachangelog.com/),
 versioning per [SemVer](https://semver.org/).
 
+## [2.20.1] — 2026-06-11
+
+- fix(schema): instances.update_text (and every action sharing a param name with a
+  differently-shaped sibling) was uncallable — the mega-tool's flat inputSchema merged
+  per-action properties first-wins, so `updates` advertised update_label's strict
+  `{instanceId, label}` item shape for ALL of update_label/update_tag/update_text/
+  prop_update. Clients validating against the advertised schema demanded `label` on
+  every item while the update_text sub-handler rejects it — no payload satisfied both
+  layers. Conflicting shapes now merge into a nested `anyOf` (one variant per distinct
+  shape, tagged with its action(s); nested unions are fine — only TOP-LEVEL
+  oneOf/allOf/anyOf is rejected by the Anthropic API). Also corrects the advertised
+  shapes of resources.update (`url`/`method`/`headers`/`body`), pages (`meta`,
+  `name`), tokens (`instanceIds`) and friends. Wire payload stays under budget
+  (98.4k / 120k chars). Regression tests: test/instances-updates-schema.test.mjs +
+  buildJsonSchemaForActions unit tests.
+
 ## [2.20.0] — 2026-06-10
 
 - feat(resources): method-aware create — form actions are standalone (no dataSource, no cache header)

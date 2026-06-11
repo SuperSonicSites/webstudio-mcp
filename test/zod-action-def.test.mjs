@@ -72,7 +72,8 @@ test("buildJsonSchemaFromZodActions: integrates with the flatten builder", () =>
   assert.equal(schema.type, "object");
   assert.deepEqual(schema.required, ["action", "label"]);
   assert.deepEqual(schema.properties.action.enum, ["create", "delete"]);
-  // Per-action props are merged into top-level properties (first-wins).
+  // Per-action props are merged into top-level properties (shape-aware:
+  // identical shapes collapse, conflicting shapes fork a nested anyOf).
   assert.ok(schema.properties.projectSlug);
   assert.ok(schema.properties.name);
   assert.ok(schema.properties.id);
