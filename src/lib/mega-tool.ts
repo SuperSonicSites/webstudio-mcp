@@ -149,11 +149,43 @@ export function toWireToolDefinition<T extends { inputSchema: object }>(definiti
 }
 
 /**
+ * Structural equality of two JSON-schema fragments, ignoring `description` at
+ * every level. Two schemas that validate identically are the same variant —
+ * description-only differences must not fork an `anyOf` (first description wins).
+ */
+function schemaShapeEquals(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+    return a.every((v, i) => schemaShapeEquals(v, b[i]));
+  }
+  if (typeof a === "object" && a !== null && typeof b === "object" && b !== null) {
+    const ka = Object.keys(a).filter((k) => k !== "description").sort();
+    const kb = Object.keys(b).filter((k) => k !== "description").sort();
+    if (ka.length !== kb.length) return false;
+    return ka.every(
+      (k, i) =>
+        k === kb[i] &&
+        schemaShapeEquals((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]),
+    );
+  }
+  return false;
+}
+
+/**
  * Build the JSON Schema for a mega-tool's `inputSchema`. Returns a **flat** schema:
  *   - `action`: enum of all branch discriminator values, description lists each
  *     variant's one-line summary (full docs live in `xActions` / meta.get_more_tools)
  *   - `label`: 3-30 chars action label
- *   - all branch properties merged by name (first-wins on conflicts)
+ *   - all branch properties merged by name. When two actions advertise the SAME
+ *     key with DIFFERENT shapes (e.g. instances' `updates[]` item is
+ *     {instanceId,label} for update_label but {instanceId,text} for update_text),
+ *     the property becomes a nested `anyOf` of the distinct shapes, each variant
+ *     tagged with the action(s) it applies to. First-wins merging here made
+ *     update_text/prop_update UNCALLABLE (v2.20.0 incident: the advertised item
+ *     shape required `label`, which the sub-handler rejects — no payload could
+ *     satisfy both). Nested anyOf is fine — only TOP-LEVEL oneOf/allOf/anyOf is
+ *     rejected by the Anthropic API, and zod unions already emit nested anyOf.
  *   - `required: ["action", "label"]` — per-action required fields are enforced at
  *     runtime by the Zod discriminated union, not by JSON Schema (the API rejects
  *     `oneOf` at the top level so we can't express per-branch required[] there).
@@ -194,13 +226,39 @@ export function buildJsonSchemaForActions(actions: ActionDef[]): MegaToolInputSc
         "15-25 word third-person summary of WHY this call is being made. REQUIRED for CRITICAL actions (delete/replace/nuke/bulk_rename/migrate_token_selections — see each action's description for the explicit \"CRITICAL — context required\" marker). Recommended for STRUCTURING actions (returns a hint if missing). Optional for TACTICAL / READ-ONLY. No PII (no email/IP), no secrets (no token/password/api-key), no first-person pronouns (use \"the caller wants to...\" or \"the agent will...\").",
     },
   };
+  // Collect the distinct shapes each key is advertised with across actions.
+  type PropertyVariant = { schema: Record<string, unknown>; actions: string[] };
+  const variantsByKey = new Map<string, PropertyVariant[]>();
   for (const a of actions) {
     for (const [key, propSchema] of Object.entries(a.schema)) {
-      if (key === "action" || key === "label") continue;
-      if (!(key in properties) && propSchema !== null && typeof propSchema === "object") {
-        properties[key] = propSchema as object;
+      // action/label/context are mega-tool-level — defined above, never overridden.
+      if (key === "action" || key === "label" || key === "context") continue;
+      if (propSchema === null || typeof propSchema !== "object") continue;
+      let variants = variantsByKey.get(key);
+      if (!variants) {
+        variants = [];
+        variantsByKey.set(key, variants);
       }
+      const existing = variants.find((v) => schemaShapeEquals(v.schema, propSchema));
+      if (existing) existing.actions.push(a.action);
+      else variants.push({ schema: propSchema as Record<string, unknown>, actions: [a.action] });
     }
+  }
+  for (const [key, variants] of variantsByKey) {
+    if (variants.length === 1) {
+      properties[key] = variants[0].schema;
+      continue;
+    }
+    properties[key] = {
+      description: "Shape depends on `action` — use the anyOf variant whose description names your action.",
+      anyOf: variants.map((v) => {
+        const applies = `[${v.actions.map((x) => `action="${x}"`).join(", ")}]`;
+        const desc = typeof v.schema.description === "string" && v.schema.description.length > 0
+          ? `${applies} ${v.schema.description}`
+          : applies;
+        return { ...v.schema, description: desc };
+      }),
+    };
   }
   const xActions: ActionMeta[] = actions.map((a) => ({
     action: a.action,
