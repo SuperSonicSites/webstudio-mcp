@@ -4,8 +4,10 @@
 
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const TOOLS_DIR = new URL("../src/tools", import.meta.url).pathname;
+// fileURLToPath, not URL.pathname — the latter yields "/D:/..." on win32.
+const TOOLS_DIR = fileURLToPath(new URL("../src/tools", import.meta.url));
 
 // Find every file that contains `definition: {`
 function findToolFiles(dir) {

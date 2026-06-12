@@ -20,9 +20,11 @@
 
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 import { loadToolNames } from "./lib/load-tool-names.mjs";
 
-const ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
+// fileURLToPath, not URL.pathname — the latter yields "/D:/..." on win32.
+const ROOT = fileURLToPath(new URL("..", import.meta.url)).replace(/[\\/]$/, "");
 const TOOLS_DIR = join(ROOT, "src/tools");
 const PATTERNS_DIR = join(ROOT, "docs/patterns");
 
