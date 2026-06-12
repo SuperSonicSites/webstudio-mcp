@@ -87,7 +87,8 @@ function loadAll(): Record<string, LongPatternDoc> {
   for (const filename of readdirSync(dir)) {
     if (!filename.endsWith(".md")) continue;
     const slug = filename.replace(/\.md$/, "");
-    const raw = readFileSync(join(dir, filename), "utf8");
+    // Normalize CRLF (Windows checkouts) so the LF-only frontmatter regex matches.
+    const raw = readFileSync(join(dir, filename), "utf8").replace(/\r\n/g, "\n");
     const { meta, body } = parseFrontmatter(raw);
     out[slug] = {
       slug,

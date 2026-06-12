@@ -86,7 +86,9 @@ export function listPatternResources(): PatternResource[] {
     const slug = entry.replace(/\.md$/, "");
     const path = join(dir, entry);
     let body = "";
-    try { body = readFileSync(path, "utf8"); } catch { continue; }
+    // Normalize CRLF: Windows checkouts (git autocrlf) would otherwise defeat
+    // the LF-only frontmatter regex and ship 200-char fallback descriptions.
+    try { body = readFileSync(path, "utf8").replace(/\r\n/g, "\n"); } catch { continue; }
     const { name, description, category, complexity, recommendedTool, recommendedToolNote, rest } = extractFrontmatter(body);
     // Fallback: first heading or filename
     const firstHeading = rest.match(/^#\s+(.+)$/m)?.[1];
@@ -116,7 +118,7 @@ export function readPatternResource(uri: string): { contents: Array<{ uri: strin
   const resources = listPatternResources();
   const res = resources.find((r) => r.slug === slug);
   if (!res) return null;
-  const text = readFileSync(res.path, "utf8");
+  const text = readFileSync(res.path, "utf8").replace(/\r\n/g, "\n");
   return {
     contents: [{
       uri: res.uri,
