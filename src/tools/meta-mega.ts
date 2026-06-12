@@ -355,7 +355,7 @@ export function makeMetaTool(getToolsList: () => ToolModule[]): ToolModule {
   return {
     definition: {
       name: "meta",
-      description: `Mega-tool for tool discovery + pattern recipes. 5 actions: index (catalog of tools + footer w/ pattern count), list_patterns (catalog of pattern slugs), describe_pattern (Webstudio recipes from docs/patterns/<slug>.md), get_more_tools (BM25 search over action descriptions), guide (free-text triage matching patterns + tools in one BM25 ranking with next-action hint). Patterns are ALSO exposed as native MCP Resources (uri: webstudio://patterns/<slug>) — clients supporting resources can list/read them without a tool call.`,
+      description: `Mega-tool for tool discovery + pattern recipes. 5 actions: index (catalog of tools + footer w/ pattern count), list_patterns (catalog of pattern slugs), describe_pattern (Webstudio recipes from docs/patterns/<slug>.md), get_more_tools (BM25 search over action descriptions), guide (free-text triage matching patterns + tools in one BM25 ranking with next-action hint).`,
       inputSchema: buildJsonSchemaFromZodActions([
         { action: "index", description: DESCRIPTIONS.index, zod: indexInputSchema },
         { action: "list_patterns", description: DESCRIPTIONS.list_patterns, zod: listPatternsInputSchema },

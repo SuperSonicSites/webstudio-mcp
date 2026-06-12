@@ -88,7 +88,7 @@ test("toWireToolDefinition: passthrough for schemas without xActions", () => {
 
 // ── buildJsonSchemaForActions wire shape ────────────────────────────────────
 
-test("action enum description carries one-line summaries + get_more_tools pointer", () => {
+test("action enum description carries one-line summaries only", () => {
   const schema = buildJsonSchemaForActions([
     {
       action: "create",
@@ -100,9 +100,46 @@ test("action enum description carries one-line summaries + get_more_tools pointe
   const desc = schema.properties.action.description;
   assert.match(desc, /action="create" — Use when: create one\./);
   assert.doesNotMatch(desc, /Do NOT use when: batch/, "detail must not travel in the enum description");
-  assert.match(desc, /meta\.get_more_tools/);
+  // v2.20.3: the get_more_tools pointer moved off the per-tool wire (was ×15)
+  // into SERVER_INSTRUCTIONS rule 8 — it must not be re-added here.
+  assert.doesNotMatch(desc, /meta\.get_more_tools/, "pointer lives once in SERVER_INSTRUCTIONS, not ×15 on the wire");
   // Full doc still available in-memory for BM25 + exact lookup.
   assert.match(schema.xActions[0].description, /Do NOT use when: batch/);
+});
+
+// ── context property guard (incident 2026-05-26) ────────────────────────────
+// `context` must stay a DECLARED property under additionalProperties:false on
+// every mega-tool wire schema — without it, clients reject the param before it
+// reaches the server and CRITICAL actions become uncallable.
+
+test("every wire schema declares `context` under additionalProperties:false", async () => {
+  const mods = [
+    ["../dist/tools/auth-mega.js", "authTool"],
+    ["../dist/tools/project-mega.js", "projectTool"],
+    ["../dist/tools/read-mega.js", "readTool"],
+    ["../dist/tools/build-mega.js", "buildTool"],
+    ["../dist/tools/instances-mega.js", "instancesTool"],
+    ["../dist/tools/pages.js", "pagesTool"],
+    ["../dist/tools/styles-mega.js", "stylesMegaTool"],
+    ["../dist/tools/tokens-mega.js", "tokensTool"],
+    ["../dist/tools/cssvar-mega.js", "cssvarTool"],
+    ["../dist/tools/variables-mega.js", "variablesTool"],
+    ["../dist/tools/resources-mega.js", "resourcesTool"],
+    ["../dist/tools/assets.js", "assetsTool"],
+    ["../dist/tools/audit-mega.js", "auditMegaTool"],
+    ["../dist/tools/cms-mega.js", "cmsTool"],
+  ];
+  const tools = [];
+  for (const [path, exp] of mods) tools.push((await import(path))[exp]);
+  tools.unshift(makeMetaTool(() => tools));
+  for (const t of tools) {
+    const wire = toWireToolDefinition(t.definition);
+    const schema = wire.inputSchema;
+    assert.equal(schema.additionalProperties, false, `${wire.name}: additionalProperties must be false`);
+    assert.ok(schema.properties.context, `${wire.name}: context must stay a declared property`);
+    assert.equal(schema.properties.context.type, "string");
+    assert.ok(schema.properties.label, `${wire.name}: label must stay declared`);
+  }
 });
 
 // ── meta.get_more_tools exact lookup (progressive disclosure path) ──────────

@@ -247,33 +247,37 @@ export function buildJsonSchemaForActions(actions: ActionDef[]): MegaToolInputSc
     throw new Error("buildJsonSchemaForActions: at least 1 action required");
   }
   const actionEnum = actions.map((a) => a.action);
+  // Per-tool wire prose is paid ×15 every session — keep these descriptions
+  // one line each; the full context policy and the get_more_tools pointer live
+  // once in SERVER_INSTRUCTIONS (src/index.ts).
   const actionDescription = actions
     .map((a) => `action="${a.action}" — ${summarizeActionDescription(a.description)}`)
-    .join("\n")
-    + `\n\nFull docs for one action (params, redirections, example): meta.get_more_tools({brief:"<tool>.<action>"}).`;
+    .join("\n");
   const properties: Record<string, object> = {
     action: { type: "string", enum: actionEnum, description: actionDescription },
     label: {
       type: "string",
       minLength: 3,
       maxLength: 30,
-      description: "Action label (3-30 chars, must be unique within a multi-action call).",
+      description: "Short unique label for this call.",
     },
     // `context` is mega-tool-level (declared in each mega-tool's Base Zod). Optional in
     // the JSON schema because the API rejects top-level oneOf/allOf/anyOf — we cannot
     // express "required IFF tier=CRITICAL" via the schema. The runtime validator
-    // (lib/context-validator.ts) enforces the tier-based requirement and returns
+    // (lib/context-validator.ts) enforces the tier-based requirement (and the
+    // PII/secrets/third-person policy stated in SERVER_INSTRUCTIONS) and returns
     // CONTEXT_REQUIRED_FOR_CRITICAL when missing for a CRITICAL action.
     //
-    // Without this property, `additionalProperties:false` rejects `context` before it
-    // reaches the server (incident 2026-05-26: instances.delete unusable from the
-    // caller despite the description listing context in the example).
+    // INCIDENT 2026-05-26: `context` must STAY a declared property here — without
+    // it, `additionalProperties:false` rejects `context` client-side before it
+    // reaches the server (instances.delete was unusable despite the description
+    // listing context in the example). Only the description may shrink.
     context: {
       type: "string",
       minLength: 60,
       maxLength: 200,
       description:
-        "15-25 word third-person summary of WHY this call is being made. REQUIRED for CRITICAL actions (delete/replace/nuke/bulk_rename/migrate_token_selections — see each action's description for the explicit \"CRITICAL — context required\" marker). Recommended for STRUCTURING actions (returns a hint if missing). Optional for TACTICAL / READ-ONLY. No PII (no email/IP), no secrets (no token/password/api-key), no first-person pronouns (use \"the caller wants to...\" or \"the agent will...\").",
+        "Third-person reason for this call (15-25 words). REQUIRED for actions marked CRITICAL. See server instructions for the policy.",
     },
   };
   // Collect the distinct shapes each key is advertised with across actions.
