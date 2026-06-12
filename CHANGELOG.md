@@ -5,6 +5,41 @@ privately before its first public release, so the history below starts at the fi
 public version. Format inspired by [Keep a Changelog](https://keepachangelog.com/),
 versioning per [SemVer](https://semver.org/).
 
+## [2.21.0] — 2026-06-12
+
+**⚠️ Packaging change: the published artifact is now a single bundled file
+with ZERO runtime dependencies, and `playwright-core` is no longer installed
+automatically.** Everything is behavior-preserving except `read.snapshot` and
+the browser-based version-recovery fallback, which now require playwright-core
+on the module path (see below).
+
+- build: single-file esbuild bundle (`bundle/index.js`, ~2.4 MB) ships to npm
+  with all deps inlined. Measured: initialize-response ~1.6 s → **~0.45 s**;
+  consumer install 15.8 s / 106 packages → **3.9 s / 1 package**; tarball 512
+  → 60 files. `npx -y` no longer re-validates a 27 MB tree per launch.
+- feat!: `playwright-core` (11.9 MB, 43% of the old install) moved out of
+  dependencies. To use `read.snapshot`, launch via
+  `npx -y -p playwright-core -p @densrt/webstudio-mcp webstudio-mcp` or
+  `npm i playwright-core` in the server's working directory (`npm i -g` does
+  NOT work — ESM resolution never searches the global tree), then
+  `npx playwright install chromium` once. Both import sites fail with these
+  exact instructions; pushes degrade gracefully (the HTML-based version
+  detection remains primary).
+- feat(surface): `WEBSTUDIO_MCP_TOOLS` named presets — `readonly`, `content`,
+  `builder` — composable with explicit names (`readonly,assets`).
+- feat(resources): `WEBSTUDIO_MCP_RESOURCES=0` disables the 42-pattern MCP
+  resources listing (~6.6 kB/session; patterns stay reachable via
+  `meta.list_patterns`/`describe_pattern`). Recommended for secondary
+  read-only instances.
+- feat(cms): `list_items` gains `fields` (server-side projection on
+  WordPress/Directus, client-side fallback) and `maxValueChars` (default 500)
+  — a 25-post WordPress listing drops from ~100 kB to under 2 kB with
+  `fields:["id","title","slug"]`. Output is compact JSON; create/update echo
+  id + fieldsSet + a bounded view instead of the full item.
+- refactor(patterns): one shared docs/patterns resolver (lib/patterns-dir)
+  covering bundle/dist/ts-node layouts; CI now smoke-tests the bundle over
+  stdio (boot, 15 tools, 42 resources).
+
 ## [2.20.3] — 2026-06-12
 
 Wire-schema diet: the full 15-tool tools/list handshake shrank **98,885 →
