@@ -23,6 +23,7 @@ import { readFileSync } from "node:fs";
 import type { ToolModule } from "./types.js";
 import { textResult, errorResult, authErrorResult, runtimeErrorResult } from "./types.js";
 import { findReplaceTargets } from "../lib/find-replace-targets.js";
+import { stagePush } from "../lib/push-stage.js";
 import { coerceRawImgInstances } from "../lib/coerce-image-component.js";
 import { coerceRawVideoInstances } from "../lib/coerce-video-component.js";
 import { lintShowBindingProps } from "../lib/lint-show-binding.js";
@@ -907,6 +908,12 @@ Example (footer column with 3 links, 1 token attached): { projectSlug:"my-site",
     const patternSummary = pattern ? `\nPattern: subtree×${pattern.subtree.length} × repeat×${pattern.repeat.length}` : "";
 
     if (isDryRun) {
+      // Stage the post-fromFile-merge input (fromFile stripped: the merge
+      // already happened, so the confirm replays EXACTLY what was previewed
+      // even if the file changes meanwhile) — see lib/push-stage.ts (v2.21.1).
+      const { fromFile: _omitFromFile, ...stagedInput } = input;
+      void _omitFromFile;
+      const stageId = stagePush("push_complete", pushTo.projectSlug, stagedInput as Record<string, unknown>);
       return textResult(`DRY-RUN push_complete
 
 Target:
@@ -919,7 +926,7 @@ Fragment: ${fragment["@webstudio/instance/v0.1"].instances.length} instance(s), 
 Transaction: ${transaction.payload.length} namespaces
 ${summary}${tokensSummary}${bindingsSummary}${patternSummary}
 
-If OK, re-run with dryRun=false AND forceConfirmed=true.${tokenHintBlock}${bindingHintBlock}`);
+If OK: build.push_staged({stageId:"${stageId}"}) pushes exactly this (single-use, 10 min) — or re-run with dryRun=false AND forceConfirmed=true.${tokenHintBlock}${bindingHintBlock}`);
     }
 
     try {

@@ -117,7 +117,7 @@ if (toolFilter.active && toolFilter.keep.size === 0) {
 const handlers = new Map(TOOLS.map((t) => [t.definition.name, t.handler]));
 
 const SERVER_NAME = "webstudio";
-const SERVER_VERSION = "2.21.0";
+const SERVER_VERSION = "2.21.1";
 
 // MCP `instructions` — sent once at handshake (per the MCP spec, the host can
 // surface these to the model as a system-level preamble). Use it for cross-cutting
@@ -129,7 +129,7 @@ const SERVER_INSTRUCTIONS = `Webstudio MCP v${SERVER_VERSION} — workflow rules
 2. **Read before mutating styles.** Call \`styles.get_decls\` on the target instance(s) before \`styles.update\` / \`tokens.update_token_styles\`. \`read.inspect\` returns style SOURCES (names + ids), NOT CSS values — without get_decls you cannot reason about the cascade (pattern inline-bg-image-overlay).
 3. **Overlay over background image** → \`backgroundImage: { type:"layers", value:[gradient, image] }\` on the element itself. Do NOT nest absolute-positioned divs or fake it with \`box-shadow\`.
 4. **Local vs token.** \`styles.update\` writes LOCAL overrides — for 2+ instances sharing decls, prefer \`tokens.create_tokens\` / \`tokens.update_token_styles\` then \`tokens.dedupe_locals\` (pattern component-architecture).
-5. **Dry-run by default.** Most mutating tools default to \`dryRun: true\`. Inspect the patch list before pushing.
+5. **Dry-run by default.** Most mutating tools default to \`dryRun: true\`. Inspect the patch list, then confirm pushes with \`build.push_staged({stageId})\` from the dry-run report — do NOT re-send the payload.
 6. **Images = native \`Image\` component.** \`src\` accepts an asset id, a URL string, or an expression — NEVER \`ws:element\` with \`tag:"img"\`. Upload via \`assets.upload\` first when possible (pattern image-component).
 7. **\`context\` policy.** Actions marked CRITICAL require \`context\`: 15-25 words, third person ("the caller wants…"), stating WHY. No PII (email/IP), no secrets (tokens/passwords/api keys), no first-person pronouns.
 8. **Full action docs** (params, redirections, example): \`meta.get_more_tools({brief:"<tool>.<action>"})\`.

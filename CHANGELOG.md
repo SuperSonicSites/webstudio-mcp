@@ -5,6 +5,20 @@ privately before its first public release, so the history below starts at the fi
 public version. Format inspired by [Keep a Changelog](https://keepachangelog.com/),
 versioning per [SemVer](https://semver.org/).
 
+## [2.21.1] — 2026-06-12
+
+- feat(push): staged push handles — `build.push_staged({stageId})`. The
+  two-stage protocol made the model RE-SEND the entire fragment payload on the
+  confirm call (8–15 kB for a mid-size section, tens of kB at 100+ instances).
+  A successful dry-run of `push_fragment`/`push_complete` now stores its
+  validated input under a single-use id (10-minute expiry, per-process) and
+  prints it in the report; confirming costs one ~60-char call. The replay
+  re-runs the FULL push pipeline (allowPush auth, coercions, Radix pre-flight,
+  version-mismatch retries) — staging skips re-transmission, never validation.
+  `push_complete` stages its post-`fromFile`-merge input, so the confirm
+  replays exactly what was previewed even if the file changes meanwhile. The
+  old re-send path (`dryRun:false` + `forceConfirmed:true`) keeps working.
+
 ## [2.21.0] — 2026-06-12
 
 **⚠️ Packaging change: the published artifact is now a single bundled file

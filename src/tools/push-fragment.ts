@@ -8,6 +8,7 @@ import { requireAuth, requirePushAuth, saveAuth } from "../auth.js";
 import { fetchBuild, pushWithRetry } from "../webstudio-client.js";
 import { fragmentToTransaction } from "../fragment-to-patches.js";
 import { coerceRawImgInstances } from "../lib/coerce-image-component.js";
+import { stagePush } from "../lib/push-stage.js";
 import { coerceRawVideoInstances } from "../lib/coerce-video-component.js";
 import { lintShowBindingProps } from "../lib/lint-show-binding.js";
 import { findReplaceTargets } from "../lib/find-replace-targets.js";
@@ -256,6 +257,9 @@ Example real push (after user confirms project name from dry-run): { projectSlug
     }
 
     if (isDryRun) {
+      // Stage the validated input so confirming doesn't re-transmit the whole
+      // payload (v2.21.1) — see lib/push-stage.ts.
+      const stageId = stagePush("push_fragment", pushTo.projectSlug, parsed.data as Record<string, unknown>);
       return textResult(`DRY-RUN
 
 Target:
@@ -268,7 +272,7 @@ Fragment: ${insts} instance(s), build version ${build.version}
 Transaction: ${transaction.payload.length} namespaces
 ${summary}
 
-If OK, re-run with dryRun=false (and allowPush=true).${imgHint}`);
+If OK: build.push_staged({stageId:"${stageId}"}) pushes exactly this (single-use, 10 min) — or re-run with dryRun=false AND forceConfirmed=true.${imgHint}`);
     }
 
     try {

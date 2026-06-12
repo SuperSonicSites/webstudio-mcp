@@ -16,11 +16,13 @@ import { createSheetTool, createSheetInputSchema } from "./create-sheet.js";
 import { createNavigationMenuTool, createNavigationMenuInputSchema } from "./create-navigation-menu.js";
 import { createPopupTool, createPopupInputSchema } from "./create-popup.js";
 import { htmlToFragment } from "../lib/html-to-fragment.js";
+import { takeStagedPush } from "../lib/push-stage.js";
 
 const TIER: Record<string, Tier> = {
   build_fragment: "STRUCTURING",
   push_fragment: "STRUCTURING",
   push_complete: "STRUCTURING",
+  push_staged: "STRUCTURING",
   create_sheet: "STRUCTURING",
   create_navigation_menu: "STRUCTURING",
   create_popup: "STRUCTURING",
@@ -32,11 +34,19 @@ const Schema = z.discriminatedUnion("action", [
   Base.extend({ action: z.literal("build_fragment") }).passthrough(),
   Base.extend({ action: z.literal("push_fragment") }).passthrough(),
   Base.extend({ action: z.literal("push_complete") }).passthrough(),
+  Base.extend({ action: z.literal("push_staged") }).passthrough(),
   Base.extend({ action: z.literal("create_sheet") }).passthrough(),
   Base.extend({ action: z.literal("create_navigation_menu") }).passthrough(),
   Base.extend({ action: z.literal("create_popup") }).passthrough(),
   Base.extend({ action: z.literal("push_html") }).passthrough(),
 ]);
+
+// `push_staged` executes a payload captured by a prior dry-run — see
+// lib/push-stage.ts. The confirm call carries ~60 chars instead of
+// re-emitting the entire fragment (8-15 kB typical, tens of kB for big pushes).
+const pushStagedInputSchema = z.object({
+  stageId: z.string().min(6).describe('Stage id from a dry-run report ("st_…"). Single-use, expires after 10 minutes.'),
+}).strict();
 
 // `push_html` is implemented inline (HTML→fragment conversion then delegate to
 // pushFragmentTool). Declare its Zod here — superset of pushFragment minus the
@@ -67,6 +77,7 @@ const D = {
 trigger.mode: auto-delay | exit-intent | scroll-depth | manual. frequency: once-per-session | once-per-user (with expiryDays) | always.
 Example: {action:"create_popup",label:"popup-promo",projectSlug:"my-site",parentInstanceId:"pageRootId",content:{kind:"image",assetId:"913a...4db",alt:"Promo",href:"/offres"},trigger:{mode:"auto-delay",delayMs:3000},frequency:"once-per-session"}`,
   push_html: `Use when: converting raw HTML+CSS into a fragment and pushing it; onboarding an existing section. Returns: push result + parse stats (rules applied/skipped). Side effects: push to Webstudio Cloud. HTML is converted to a WebstudioFragment. Limits: 1 root element only, no @keyframes, no <style> tags in HTML (pass CSS separately), media queries limited to Webstudio breakpoints (max-width: 991/767/479). Example: {action:"push_html",label:"import-section",projectSlug:"my-site",pushTo:{projectSlug:"my-site",parentInstanceId:"root",dryRun:true},html:"<div class='hero'><h1>Hello</h1></div>",css:".hero { padding: 40px; }"}`,
+  push_staged: `Use when: confirming a push previewed by a dry-run — pass the stageId from the report. Do NOT use when: the payload changed since the dry-run (re-run the dry-run instead — stages replay EXACTLY what was previewed). Returns: the real push result (same as the underlying push_fragment/push_complete). Side effects: push to Webstudio Cloud (requires allowPush); the stage is single-use and expires after 10 minutes. The full push pipeline re-runs (auth, coercions, Radix pre-flight, version-mismatch retries) — staging skips re-transmission, never validation. Example: {action:"push_staged",label:"confirm-hero",stageId:"st_V1StGXR8_Z"}`,
 };
 
 const strip = (input: Record<string, unknown>): Record<string, unknown> => {
@@ -82,6 +93,26 @@ const HANDLERS = {
   create_sheet: async (i: Record<string, unknown>) => createSheetTool.handler(strip(i)),
   create_navigation_menu: async (i: Record<string, unknown>) => createNavigationMenuTool.handler(strip(i)),
   create_popup: async (i: Record<string, unknown>) => createPopupTool.handler(strip(i)),
+  push_staged: async (i: Record<string, unknown>) => {
+    const stripped = strip(i);
+    const parsed = pushStagedInputSchema.safeParse(stripped);
+    if (!parsed.success) return errorResult("VALIDATION_FAILED", `Validation error: ${parsed.error.message}`);
+    const staged = takeStagedPush(parsed.data.stageId);
+    if (!staged) {
+      return errorResult(
+        "VALIDATION_FAILED",
+        `stageId "${parsed.data.stageId}" not found — stages are single-use and expire after 10 minutes (or the server restarted). Re-run the dry-run to get a fresh stageId.`,
+      );
+    }
+    // Replay the captured args with the confirm flags set. The underlying
+    // handler re-runs its full pipeline (requirePushAuth, coercions, Radix
+    // pre-flight, version-mismatch retries).
+    const pushTo = (staged.args.pushTo ?? {}) as Record<string, unknown>;
+    const replay = { ...staged.args, pushTo: { ...pushTo, dryRun: false, forceConfirmed: true } };
+    if (staged.handler === "push_fragment") return pushFragmentTool.handler(replay);
+    if (staged.handler === "push_complete") return pushCompleteTool.handler(replay);
+    return errorResult("INTERNAL_ERROR", `Unknown staged handler "${staged.handler}".`);
+  },
   push_html: async (i: Record<string, unknown>) => {
     const stripped = strip(i);
     const html = String(stripped.html ?? "");
@@ -103,11 +134,12 @@ const HANDLERS = {
 export const buildTool: ToolModule = {
   definition: {
     name: "build",
-    description: `Mega-tool for fragment construction + push (cloud mutation entry point). 7 actions: build_fragment (offline), push_fragment (cloud, basic), push_complete (cloud, full section: tokens+bindings+pattern.repeat in one transaction), create_sheet, create_navigation_menu, create_popup, push_html. All STRUCTURING tier.`,
+    description: `Mega-tool for fragment construction + push (cloud mutation entry point). 8 actions: build_fragment (offline), push_fragment (cloud, basic), push_complete (cloud, full section: tokens+bindings+pattern.repeat in one transaction), push_staged (confirm a dry-run by stageId — no payload re-send), create_sheet, create_navigation_menu, create_popup, push_html. All STRUCTURING tier.`,
     inputSchema: buildJsonSchemaFromZodActions([
       { action: "build_fragment", description: D.build_fragment, zod: buildFragmentInputSchema },
       { action: "push_fragment", description: D.push_fragment, zod: pushFragmentInputSchema },
       { action: "push_complete", description: D.push_complete, zod: pushCompleteInputSchema },
+      { action: "push_staged", description: D.push_staged, zod: pushStagedInputSchema },
       { action: "create_sheet", description: D.create_sheet, zod: createSheetInputSchema },
       { action: "create_navigation_menu", description: D.create_navigation_menu, zod: createNavigationMenuInputSchema },
       { action: "create_popup", description: D.create_popup, zod: createPopupInputSchema },
