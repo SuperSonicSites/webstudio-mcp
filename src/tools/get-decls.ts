@@ -15,6 +15,7 @@ import { textResult, errorResult, authErrorResult, runtimeErrorResult } from "./
 import { requireAuth } from "../auth.js";
 import { fetchBuild } from "../webstudio-client.js";
 import type { WebstudioBuild } from "../webstudio-client.js";
+import { hintOnce } from "../lib/hint-once.js";
 import { resolvePageInstanceIds } from "./inspect-instance/resolve.js";
 
 export const getDeclsInputSchema = z.object({
@@ -165,10 +166,13 @@ function renderReports(reports: InstanceReport[], opts: z.infer<typeof getDeclsI
     }
   }
 
-  lines.push("");
-  lines.push(`---`);
-  lines.push(`Tip: pass \`json:true\` to receive a structured payload for downstream tooling. Use \`includeTokens:false\` to scope to LOCAL overrides only.`);
-  return lines.join("\n");
+  // Rate-limited per process (v2.20.3) — a fixed footer on every text response
+  // is pure token overhead after the first read of a chained workflow.
+  const tip = hintOnce(
+    "get-decls-json-tip",
+    "\n---\nTip: pass `json:true` to receive a structured payload for downstream tooling. Use `includeTokens:false` to scope to LOCAL overrides only.",
+  );
+  return lines.join("\n") + tip;
 }
 
 export const getDeclsTool: ToolModule = {

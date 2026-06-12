@@ -18,6 +18,7 @@ import type { ToolModule } from "./types.js";
 import { textResult, errorResult, authErrorResult, runtimeErrorResult } from "./types.js";
 import { requireAuth } from "../auth.js";
 import { fetchBuild } from "../webstudio-client.js";
+import { hintOnce } from "../lib/hint-once.js";
 import type { WebstudioBuild } from "../webstudio-client.js";
 import { resolvePageInstanceIds } from "./inspect-instance/resolve.js";
 import { buildIndexes, renderInstance } from "./inspect-instance/format.js";
@@ -89,15 +90,18 @@ Read-only.`,
       renderInstance(id, idx, opts, lines);
     }
 
-    // Forced discoverability hint: this dump shows style SOURCES (ids + token names),
+    // Discoverability hint: this dump shows style SOURCES (ids + token names),
     // not the actual CSS values. Agents that miss this gap hack around it (the
-    // box-shadow-overlay regression on a production site, May 2026). Always nudge toward the
-    // proper read primitive — and to project.export for full state.
-    const hint =
+    // box-shadow-overlay regression on a production site, May 2026). Nudge toward
+    // the proper read primitive — rate-limited per process (v2.20.3): the fixed
+    // string exceeded the data on small inspects when repeated on every call.
+    const hint = hintOnce(
+      "inspect-style-sources",
       "\n\n[hint] Style sources above are NAMES + IDs only — not actual CSS values. " +
-      "Call `styles.get_decls` to read effective declarations on these instance(s) " +
-      "(supports propertyFilter, breakpoint, state, includeTokens), or `project.export` " +
-      "for the entire build state.";
+        "Call `styles.get_decls` to read effective declarations on these instance(s) " +
+        "(supports propertyFilter, breakpoint, state, includeTokens), or `project.export` " +
+        "for the entire build state.",
+    );
 
     return textResult(`Inspected ${targetIds.length} instance(s):${lines.join("\n")}${hint}`);
   },
