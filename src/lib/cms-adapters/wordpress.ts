@@ -186,10 +186,12 @@ class WordPressAdapterImpl implements CmsAdapter {
     return { collection, fields };
   }
 
-  async listItems(collection: string, opts: { filter?: Record<string, unknown>; limit?: number; offset?: number } = {}): Promise<CmsItem[]> {
+  async listItems(collection: string, opts: { filter?: Record<string, unknown>; limit?: number; offset?: number; fields?: string[] } = {}): Promise<CmsItem[]> {
     const params = new URLSearchParams();
     if (opts.limit !== undefined) params.set("per_page", String(opts.limit));
     if (opts.offset !== undefined) params.set("offset", String(opts.offset));
+    // Server-side projection — content.rendered alone can be 100 kB per post.
+    if (opts.fields?.length) params.set("_fields", opts.fields.join(","));
     if (opts.filter) {
       // WP REST accepts filters as flat query params (search, slug, status, categories…).
       // We forward the keys verbatim; user is responsible for using WP-supported filters.

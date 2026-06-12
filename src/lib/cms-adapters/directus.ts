@@ -81,10 +81,11 @@ class DirectusAdapterImpl implements CmsAdapter {
     return { collection, fields };
   }
 
-  async listItems(collection: string, opts: { filter?: Record<string, unknown>; limit?: number; offset?: number } = {}): Promise<CmsItem[]> {
+  async listItems(collection: string, opts: { filter?: Record<string, unknown>; limit?: number; offset?: number; fields?: string[] } = {}): Promise<CmsItem[]> {
     const params = new URLSearchParams();
     if (opts.limit !== undefined) params.set("limit", String(opts.limit));
     if (opts.offset !== undefined) params.set("offset", String(opts.offset));
+    if (opts.fields?.length) params.set("fields", opts.fields.join(","));
     if (opts.filter) params.set("filter", JSON.stringify(opts.filter));
     const qs = params.toString();
     const data = await this.request<{ data: CmsItem[] }>("GET", `/items/${collection}${qs ? `?${qs}` : ""}`);

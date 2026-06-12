@@ -32,8 +32,13 @@ export type CmsAdapter = {
   listCollections(): Promise<string[]>;
   /** Discover the schema (fields + types) of a specific collection. */
   discoverSchema(collection: string): Promise<CollectionDef>;
-  /** List items with optional filter + pagination. */
-  listItems(collection: string, opts?: { filter?: Record<string, unknown>; limit?: number; offset?: number }): Promise<CmsItem[]>;
+  /**
+   * List items with optional filter + pagination. `fields` requests
+   * server-side projection where the backend supports it (WordPress _fields,
+   * Directus fields); adapters without support ignore it — the caller applies
+   * client-side projection as a fallback either way.
+   */
+  listItems(collection: string, opts?: { filter?: Record<string, unknown>; limit?: number; offset?: number; fields?: string[] }): Promise<CmsItem[]>;
   /** Create an item. Returns the created item with id. */
   createItem(collection: string, data: CmsItem): Promise<CmsItem>;
   /** Update an item by id. Returns the updated item. */

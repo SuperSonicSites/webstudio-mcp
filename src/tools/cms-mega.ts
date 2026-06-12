@@ -55,6 +55,12 @@ const listItemsInputSchema = z.object({
   filter: z.record(z.string(), z.unknown()).optional(),
   limit: z.number().int().min(1).max(1000).optional(),
   offset: z.number().int().min(0).optional(),
+  fields: z.array(z.string()).optional().describe(
+    "Project items to these top-level fields (server-side where supported: WordPress _fields, Directus fields; client-side otherwise).",
+  ),
+  maxValueChars: z.number().int().min(0).optional().describe(
+    "Truncate each string value at this length with an explicit marker. Default 500; 0 disables.",
+  ),
 }).strict();
 const createItemInputSchema = z.object({
   source: sourceField,
@@ -84,7 +90,7 @@ const bindCollectionToInstanceInputSchema = z.object({
 const D = {
   list_collections: `Use when: listing collection names available in the configured CMS source. Do NOT use when: you know the collection name (use discover_schema). Returns: array of collection names. Side effects: read network. Pass \`source\` to pick the adapter ("directus" default | "wordpress[:name]" | "n8n[:name]"). Example: {action:"list_collections",label:"audit",source:"wordpress:crs"}`,
   discover_schema: `Use when: discovering a collection's fields and types before mapping to Webstudio props. Do NOT use when: needing field VALUES (use list_items). WordPress: collection = rest_base ("posts","pages","motos"). n8n: collection = workflow name. Returns: {collection, fields:[{field, type, required}]}. Side effects: read network. Example: {action:"discover_schema",label:"schema-motos",source:"directus",collection:"products"}`,
-  list_items: `Use when: listing items from a CMS collection with filter and pagination. Do NOT use when: just wanting the schema (use discover_schema). Filter syntax depends on adapter (Directus: Directus query language ; WordPress: REST query params like {status:"publish", search:"moto"} ; n8n: {status:"success"}). Returns: array of items. Side effects: read network. Example: {action:"list_items",label:"list-motos",source:"directus",collection:"products",limit:10}`,
+  list_items: `Use when: listing items from a CMS collection with filter and pagination. Do NOT use when: just wanting the schema (use discover_schema). Filter syntax depends on adapter (Directus: Directus query language ; WordPress: REST query params like {status:"publish", search:"moto"} ; n8n: {status:"success"}). Pass fields:["id","title","slug"] to project items (server-side on WordPress/Directus) and maxValueChars (default 500, 0=off) to bound long values — full posts can be 100 kB each. Returns: compact array of items. Side effects: read network. Example: {action:"list_items",label:"list-motos",source:"directus",collection:"products",limit:10,fields:["id","title","slug"]}`,
   create_item: `Use when: insert a new item in the CMS collection (Directus/WordPress) OR trigger a workflow webhook (n8n). Do NOT use when: pushing a Webstudio fragment (use build.push_fragment). Returns: created item with id, or webhook response (n8n). Side effects: network mutation on the CMS source. Example: {action:"create_item",label:"add-post",source:"wordpress:crs",collection:"posts",data:{title:"Hello",content:"<p>Body</p>",status:"publish"}}`,
   update_item: `Use when: modifying an existing CMS item's fields. Do NOT use when: changing the binding (use bind_collection_to_instance). n8n: NOT SUPPORTED (executions are immutable — call create_item again to start a new run). Returns: updated item. Side effects: network mutation. Example: {action:"update_item",label:"upd-price",source:"directus",collection:"products",itemId:"abc",data:{price:5500}}`,
   delete_item: `Use when: removing an item from a CMS collection by id. Do NOT use when: just unbinding the instance (delete the binding instead). Returns: confirmation. Side effects: network mutation, CRITICAL — context required, irreversible. dryRun defaults true. WordPress uses force-delete (bypass trash). n8n: deletes an execution by id. Example: {action:"delete_item",label:"drop-moto",source:"directus",collection:"products",itemId:"abc",context:"Removing the discontinued 2024 model after the rebrand cleanup operation requested by the dealer last week",dryRun:false}`,
@@ -96,6 +102,31 @@ const strip = (input: Record<string, unknown>): Record<string, unknown> => {
   void _a; void _l; void _c;
   return rest;
 };
+
+// ── Response economy (v2.21.0) ───────────────────────────────────────────────
+// CMS items are the only hot-path payload returning unbounded third-party
+// objects (a WordPress post's content.rendered alone can be 100 kB). Listings
+// are projected + truncated; mutation echoes are truncated. Raw values stay
+// reachable by raising maxValueChars / passing fields.
+
+/** Recursively truncate string values, marking what was cut. */
+function truncateValues(v: unknown, max: number): unknown {
+  if (max <= 0) return v;
+  if (typeof v === "string") {
+    return v.length > max ? `${v.slice(0, max)}…[truncated, ${v.length} chars]` : v;
+  }
+  if (Array.isArray(v)) return v.map((x) => truncateValues(x, max));
+  if (v !== null && typeof v === "object") {
+    return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, truncateValues(x, max)]));
+  }
+  return v;
+}
+
+/** Client-side projection fallback — adapters without server-side support return full items. */
+function projectFields(item: Record<string, unknown>, fields?: string[]): Record<string, unknown> {
+  if (!fields?.length) return item;
+  return Object.fromEntries(fields.filter((f) => f in item).map((f) => [f, item[f]]));
+}
 
 /** Extract the `source` descriptor from a stripped action input (defaults to "directus"). */
 const resolveSource = (args: Record<string, unknown>): string =>
@@ -141,12 +172,20 @@ const HANDLERS = {
     const limit = typeof args.limit === "number" ? args.limit : 25;
     const offset = typeof args.offset === "number" ? args.offset : 0;
     const filter = (args.filter as Record<string, unknown> | undefined);
+    const fields = Array.isArray(args.fields) ? (args.fields as string[]) : undefined;
+    const maxValueChars = typeof args.maxValueChars === "number" ? args.maxValueChars : 500;
     let adapter: CmsAdapter;
     try { adapter = await getAdapterBySource(source); }
     catch (err) { return errorResult("AUTH_MISSING", (err as Error).message); }
     try {
-      const items = await adapter.listItems(collection, { limit, offset, filter });
-      return textResult(`Items in "${collection}" (${items.length}):\n${JSON.stringify(items, null, 2)}`);
+      const items = await adapter.listItems(collection, { limit, offset, filter, fields });
+      // Client-side projection backs up server-side support; compact JSON
+      // (pretty-printing was 15-30% of the payload).
+      const shaped = items.map((it) => truncateValues(projectFields(it, fields), maxValueChars));
+      const note = maxValueChars > 0
+        ? ` (values truncated at ${maxValueChars} chars — raise maxValueChars or pass fields for full values)`
+        : "";
+      return textResult(`Items in "${collection}" (${items.length})${note}:\n${JSON.stringify(shaped)}`);
     } catch (err) {
       return errorResult("INTERNAL_ERROR", `listItems failed: ${(err as Error).message}`);
     }
@@ -161,7 +200,11 @@ const HANDLERS = {
     catch (err) { return errorResult("AUTH_MISSING", (err as Error).message); }
     try {
       const created = await adapter.createItem(collection, data);
-      return textResult(`Created in "${collection}":\n${JSON.stringify(created, null, 2)}`);
+      // The caller just SENT this data — echo only id + a truncated view
+      // (n8n returns webhook responses here, so the body stays, bounded).
+      return textResult(
+        `Created in "${collection}": id=${created.id ?? "?"} fieldsSet=[${Object.keys(data).join(", ")}]\n${JSON.stringify(truncateValues(created, 200))}`,
+      );
     } catch (err) {
       return errorResult("INTERNAL_ERROR", `createItem failed: ${(err as Error).message}`);
     }
@@ -177,7 +220,9 @@ const HANDLERS = {
     catch (err) { return errorResult("AUTH_MISSING", (err as Error).message); }
     try {
       const updated = await adapter.updateItem(collection, itemId, data);
-      return textResult(`Updated "${collection}/${itemId}":\n${JSON.stringify(updated, null, 2)}`);
+      return textResult(
+        `Updated "${collection}/${itemId}" fieldsSet=[${Object.keys(data).join(", ")}]\n${JSON.stringify(truncateValues(updated, 200))}`,
+      );
     } catch (err) {
       return errorResult("INTERNAL_ERROR", `updateItem failed: ${(err as Error).message}`);
     }
