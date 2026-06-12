@@ -200,25 +200,31 @@ export function commonHeaders(config: WebstudioConfig, withContent = false): Rec
 // block a tool call indefinitely.
 const HTTP_TIMEOUT_MS = 15_000;
 
-// ── Build cache (v2.13.0) ───────────────────────────────────────────────────
+// ── Build cache (v2.13.0; TTL raised v2.20.2) ──────────────────────────────
 // Every tool used to re-download the FULL project build per call (~0.5-2s each,
-// 182 fetchBuild call sites — audit 2026-06-10). Agent workflows chain reads and
-// dry-runs against the same project within seconds, so a short-TTL in-memory
-// cache eliminates most of that latency with no correctness loss:
+// ~92 fetchBuild call sites across 87 files — recount 2026-06-11). Agent
+// workflows chain reads and dry-runs against the same project within seconds,
+// so a short-TTL in-memory cache eliminates most of that latency with no
+// correctness loss:
 //   - any push attempt invalidates the entry BEFORE hitting the network
 //     (server state about to change → next read must re-fetch);
+//   - asset uploads invalidate too (v2.20.2) — /rest/assets POSTs mutate the
+//     server-side build outside the trpc patch path;
 //   - pushWithRetry forces a fresh fetch on retries (version_mismatched means
 //     our snapshot is stale by definition);
-//   - reads are served a structuredClone — 182 call sites can mutate their
+//   - reads are served a structuredClone — call sites can mutate their
 //     copy freely without corrupting the cache;
 //   - staleness from EXTERNAL edits (user typing in the builder) is bounded by
 //     the TTL and, on push paths, self-heals via the version_mismatched retry.
+// Default 120s (was 30s): the server offers no HTTP revalidation (Cache-Control:
+// private, no-store; no ETag), so this TTL is the only read-dedup lever, and
+// every mutation path above invalidates eagerly.
 // Tune or disable via WEBSTUDIO_MCP_BUILD_CACHE_TTL_MS (0 disables).
 const BUILD_CACHE_TTL_MS = (() => {
   const raw = process.env.WEBSTUDIO_MCP_BUILD_CACHE_TTL_MS;
-  if (raw === undefined || raw === "") return 30_000;
+  if (raw === undefined || raw === "") return 120_000;
   const n = Number(raw);
-  return Number.isFinite(n) && n >= 0 ? n : 30_000;
+  return Number.isFinite(n) && n >= 0 ? n : 120_000;
 })();
 
 const buildCache = new Map<string, { build: WebstudioBuild; fetchedAt: number }>();
@@ -242,7 +248,7 @@ export async function fetchBuild(
     const cached = buildCache.get(config.projectId);
     if (cached && Date.now() - cached.fetchedAt < BUILD_CACHE_TTL_MS) {
       // Telemetry (opt-in): hit/miss ratio feeds the weekly report — tells us
-      // whether the 30s TTL is calibrated for real agent workflows.
+      // whether the TTL default is calibrated for real agent workflows.
       void logTelemetry({ event: "build_cache", hit: true, projectId: config.projectId });
       return structuredClone(cached.build);
     }
