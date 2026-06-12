@@ -67,6 +67,15 @@ export const StyleValueSchema: z.ZodType<StyleValue> = z.lazy(() => z.union([
   }),
 ]));
 
+// Wire-only stand-in for StyleValueSchema (v2.20.3). zod-to-json-schema
+// inlines the 11-variant recursive union (~2.4 kB) at every ADVERTISED use
+// site — and recursive refs degrade to {} anyway, so the advertised union was
+// already lossy. Tools pass this to the schema builder while their RUNTIME
+// parse keeps the real StyleValueSchema (sub-handlers re-validate strictly).
+export const StyleValueWireSchema = z.record(z.string(), z.unknown()).describe(
+  'StyleValue object — e.g. {type:"unit",value:6,unit:"rem"}, {type:"keyword",value:"red"}, {type:"var",value:"--x"}. Any raw CSS string: {type:"unparsed",value:"<css>"} (coerced server-side).',
+);
+
 export const BuildFragmentSchema = z.object({
   instances: z.array(z.object({
     id: z.string(),
@@ -103,11 +112,8 @@ export const BuildFragmentSchema = z.object({
     instanceId: z.string(),
     tokenSlug: z.string(),
   })).default([]).describe(
-    "Consumes the LOCAL registry (~/.webstudio-mcp/projects/<slug>/tokens.json). " +
-    "⚠️ DO NOT use to reference a cloud token that already exists — silently duplicates it. " +
-    "Refused by push_complete since v2.7.6 if slug matches an existing cloud token by name-normalized. " +
-    "For existing cloud tokens: use tokens.attach_token. For new tokens with attachments: cloudTokens. " +
-    "See pattern tokens-cloud-vs-local."
+    "Consumes the LOCAL token registry. ⚠️ NEVER for tokens already in the cloud (silent duplicate; " +
+    "refused when the slug matches) — use tokens.attach_token instead. See pattern tokens-cloud-vs-local.",
   ),
   /**
    * Raw dataSource entries pushed alongside instances/props/styles. Required to

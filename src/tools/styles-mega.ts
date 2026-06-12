@@ -19,7 +19,7 @@ import { validateContext, logContext, type Tier } from "../lib/context-validator
 import { validateLabel } from "../lib/action-label.js";
 import { dispatchAction } from "../lib/mega-tool.js";
 import { buildJsonSchemaFromZodActions } from "../lib/zod-action-def.js";
-import { updateStylesTool, updateStylesInputSchema } from "./update-styles.js";
+import { updateStylesTool, updateStylesWireSchema } from "./update-styles.js";
 import { deleteLocalStyleDeclTool, deleteLocalStyleDeclInputSchema } from "./delete-local-style-decl.js";
 import { replaceLocalValueTool, replaceLocalValueInputSchema } from "./replace-local-value.js";
 import { getDeclsTool, getDeclsInputSchema } from "./get-decls.js";
@@ -65,7 +65,7 @@ export const stylesMegaTool: ToolModule = {
     description: `Mega-tool for instance style declarations (read + write). 4 actions: get_decls (READ effective decls), update, delete_decl, replace_value (all LOCAL only — for TOKEN lifecycle use tokens mega-tool; for CSS variables use cssvar). v2: write actions only accept batch forms (updates:[...] / deletions:[...]). Recommended workflow: get_decls → reason → update.`,
     inputSchema: buildJsonSchemaFromZodActions([
       { action: "get_decls", description: D.get_decls, zod: getDeclsInputSchema },
-      { action: "update", description: D.update, zod: updateStylesInputSchema },
+      { action: "update", description: D.update, zod: updateStylesWireSchema },
       { action: "delete_decl", description: D.delete_decl, zod: deleteLocalStyleDeclInputSchema },
       { action: "replace_value", description: D.replace_value, zod: replaceLocalValueInputSchema },
     ]),

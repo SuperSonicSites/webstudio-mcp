@@ -100,12 +100,12 @@ export const createPopupInputSchema = z
       .string()
       .nullable()
       .optional()
-      .describe('Visually-hidden DialogTitle (sr-only) injected in the content. Default "Promotional offer". Pass null to opt out (NOT recommended).'),
+      .describe('Sr-only DialogTitle (Radix requirement). Default "Promotional offer"; null opts out (NOT recommended).'),
     a11yDescription: z
       .string()
       .nullable()
       .optional()
-      .describe('Visually-hidden DialogDescription (sr-only) injected in the content. Default "Discover our latest offer". Pass null to opt out (NOT recommended).'),
+      .describe('Sr-only DialogDescription (Radix requirement). Default "Discover our latest offer"; null opts out (NOT recommended).'),
     dryRun: z.boolean().default(true),
   })
   .strict();

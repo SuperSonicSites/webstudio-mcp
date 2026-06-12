@@ -67,7 +67,7 @@ export const createNavigationMenuInputSchema = z.object({
   triggerColumnGap: z.string().optional().describe('Gap between trigger label and chevron icon. CSS value. Default 4px.'),
   // ── Behavior
   animation: z.enum(["fade", "fade-down", "none"]).default("fade-down").describe('Mega panel entrance animation. Default "fade-down" (subtle from-top slide + fade).'),
-  animSlug: z.string().optional().describe('Slug for data-role + keyframes namespace (default "mega"). Use a project-specific slug to avoid CSS collisions across multiple navs on the same page.'),
+  animSlug: z.string().optional().describe('data-role + keyframes namespace (default "mega") — make project-specific to avoid CSS collisions.'),
   triggerChevron: z.boolean().default(true).describe('Show a chevron icon next to mega-menu triggers, rotating 180° on hover.'),
   dryRun: z.boolean().default(true),
 }).strict();

@@ -4,7 +4,7 @@
 import { z } from "zod";
 import type { ToolModule } from "./types.js";
 import { textResult, errorResult, authErrorResult, runtimeErrorResult } from "./types.js";
-import { StyleValueSchema } from "../build-from-args.js";
+import { StyleValueSchema, StyleValueWireSchema } from "../build-from-args.js";
 import { requireAuth, requirePushAuth } from "../auth.js";
 import { fetchBuild, pushWithRetry } from "../webstudio-client.js";
 import { buildUpdateStylesTransaction, type StyleUpdate } from "./update-styles/build-patches.js";
@@ -29,6 +29,13 @@ export const updateStylesInputSchema = z.object({
   updates: z.array(StyleUpdateSchema).min(1),
   dryRun: z.boolean().default(true),
 }).strict();
+
+// Advertised (wire) variant: compact StyleValue stand-in instead of the
+// inlined 11-variant union. Runtime stays on updateStylesInputSchema — the
+// handler's safeParse re-validates every update strictly.
+export const updateStylesWireSchema = updateStylesInputSchema.extend({
+  updates: z.array(StyleUpdateSchema.extend({ value: StyleValueWireSchema })).min(1),
+});
 
 export const updateStylesTool: ToolModule = {
   definition: {

@@ -56,7 +56,7 @@ export const createSheetInputSchema = z.object({
   linkFontSize: z.string().optional().describe('Font-size of flat links AND collapsible-group summary labels. Pass a CSS value. Default rem(1.125).'),
   subLinkFontSize: z.string().optional().describe('Font-size of sub-links inside collapsible groups (should be ≤ linkFontSize). Pass a CSS value. Default rem(1).'),
   // ── Floating drawer + responsive ──────────────────────────────────────────
-  topOffset: z.string().optional().describe('Offset from viewport top — overlay starts below this point (e.g. "var(--brand-header-height)", "104px"). Keeps the header visible above the open drawer. Default: 0.'),
+  topOffset: z.string().optional().describe('Offset from viewport top (CSS value) — keeps the header visible above the open drawer. Default 0.'),
   panelInset: z.object({
     top: z.string().optional(),
     right: z.string().optional(),
@@ -83,8 +83,8 @@ export const createSheetInputSchema = z.object({
     ariaLabel: z.string().optional(),
   })).optional().describe('Row of social icons at the bottom of the drawer. Built-in SVGs for the listed platforms.'),
   // ── Accessibility (Radix Dialog requires Title + Description) ─────────────
-  a11yTitle: z.string().nullable().optional().describe('Visually-hidden DialogTitle (sr-only) injected in the panel. Required by Radix Dialog to silence runtime warnings. Default: "Navigation menu". Pass null to opt out (NOT recommended).'),
-  a11yDescription: z.string().nullable().optional().describe('Visually-hidden DialogDescription (sr-only) injected in the panel. Required by Radix Dialog to silence the "Missing Description" warning. Default: "Links to the main sections of the site.". Pass null to opt out (NOT recommended).'),
+  a11yTitle: z.string().nullable().optional().describe('Sr-only DialogTitle (Radix requirement). Default "Navigation menu"; null opts out (NOT recommended).'),
+  a11yDescription: z.string().nullable().optional().describe('Sr-only DialogDescription (Radix requirement). Default provided; null opts out (NOT recommended).'),
   dryRun: z.boolean().default(true),
 }).strict();
 
