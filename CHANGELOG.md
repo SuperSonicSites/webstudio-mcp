@@ -5,6 +5,40 @@ privately before its first public release, so the history below starts at the fi
 public version. Format inspired by [Keep a Changelog](https://keepachangelog.com/),
 versioning per [SemVer](https://semver.org/).
 
+## [2.20.3] — 2026-06-12
+
+Wire-schema diet: the full 15-tool tools/list handshake shrank **98,885 →
+75,783 B (−23.4%, ~−5.8k tokens per session)**; the filtered
+`meta,read,audit` surface shrank 13,398 → 10,030 B. Measured live over
+stdio; `scripts/measure-wire.mjs` (new) reproduces the numbers.
+
+- fix(schema): default/examples-only differences no longer fork per-action
+  `anyOf` variants (12 duplicated shapes across 10 tools). When merged
+  actions disagree on an advertised `default`, the key is dropped rather
+  than first-wins — advertising `default:true` on `build.pushTo` while
+  push_fragment runtime-defaults false could have triggered an unintended
+  live push. (−4.5 kB)
+- perf(wire): the ~470-char `context` policy, label description, and
+  "Full docs…" trailer were byte-identical across all 15 tools — now one
+  line each, with the policy and the get_more_tools pointer stated once in
+  the server instructions (which net-shrank, 1,793 → 1,693 B). Runtime
+  enforcement unchanged (context-validator). New guard test pins `context`
+  as a declared property under `additionalProperties:false` (incident
+  2026-05-26). (−7.8 kB)
+- perf(wire): action summary cap 220 → 110 chars; enum lines drop the
+  `action="…"` prefix; all 73 over-long "Use when:" leads rewritten to
+  ≤100-char verb phrases with displaced detail preserved off-wire
+  (meta.get_more_tools / guide BM25 still index full docs). (−8.0 kB)
+- perf(wire): styles.update advertises a compact StyleValue stand-in
+  instead of the inlined 11-variant recursive union (which degraded to {}
+  through zod-to-json-schema anyway); runtime validation unchanged. Six
+  oversized property descriptions in build trimmed. (−2.7 kB)
+- perf(output): the fixed read.inspect style-sources hint (~280 chars) and
+  get_decls `json:true` footer (~150 chars) now emit on the first call and
+  every 10th thereafter instead of every response (hint-once).
+- chore(scripts): wire measurement promoted to `scripts/measure-wire.mjs`;
+  lint-descriptions + measure-baseline now run on Windows (fileURLToPath).
+
 ## [2.20.2] — 2026-06-11
 
 - fix(assets): asset uploads now invalidate the build cache before the first

@@ -117,7 +117,7 @@ if (toolFilter.active && toolFilter.keep.size === 0) {
 const handlers = new Map(TOOLS.map((t) => [t.definition.name, t.handler]));
 
 const SERVER_NAME = "webstudio";
-const SERVER_VERSION = "2.20.2";
+const SERVER_VERSION = "2.20.3";
 
 // MCP `instructions` — sent once at handshake (per the MCP spec, the host can
 // surface these to the model as a system-level preamble). Use it for cross-cutting
