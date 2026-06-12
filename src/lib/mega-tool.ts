@@ -148,10 +148,17 @@ export function toWireToolDefinition<T extends { inputSchema: object }>(definiti
   return wire;
 }
 
+// Annotation keys that never change what validates: differences in these must
+// not fork an `anyOf` variant (v2.20.3 — default/examples-only forks shipped
+// 12 two-variant anyOfs across 10 tools, ~2.9 kB of duplicated shapes).
+const SHAPE_ANNOTATION_KEYS = new Set(["description", "default", "examples"]);
+
 /**
- * Structural equality of two JSON-schema fragments, ignoring `description` at
- * every level. Two schemas that validate identically are the same variant —
- * description-only differences must not fork an `anyOf` (first description wins).
+ * Structural equality of two JSON-schema fragments, ignoring annotation-only
+ * keys (description/default/examples) at every level. Two schemas that
+ * validate identically are the same variant — annotation-only differences
+ * must not fork an `anyOf` (first description wins; conflicting defaults are
+ * dropped by dropConflictingDefaults).
  */
 function schemaShapeEquals(a: unknown, b: unknown): boolean {
   if (a === b) return true;
@@ -160,8 +167,8 @@ function schemaShapeEquals(a: unknown, b: unknown): boolean {
     return a.every((v, i) => schemaShapeEquals(v, b[i]));
   }
   if (typeof a === "object" && a !== null && typeof b === "object" && b !== null) {
-    const ka = Object.keys(a).filter((k) => k !== "description").sort();
-    const kb = Object.keys(b).filter((k) => k !== "description").sort();
+    const ka = Object.keys(a).filter((k) => !SHAPE_ANNOTATION_KEYS.has(k)).sort();
+    const kb = Object.keys(b).filter((k) => !SHAPE_ANNOTATION_KEYS.has(k)).sort();
     if (ka.length !== kb.length) return false;
     return ka.every(
       (k, i) =>
@@ -170,6 +177,49 @@ function schemaShapeEquals(a: unknown, b: unknown): boolean {
     );
   }
   return false;
+}
+
+const jsonEquals = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b);
+
+/**
+ * `kept` and `incoming` are shape-equal modulo annotations. Where they
+ * disagree on `default` (different values, or only one side advertises one),
+ * the merged schema must NOT advertise any default: e.g. build.pushTo's
+ * nested dryRun runtime-defaults false for push_fragment but true for
+ * push_complete — advertising either could trigger an unintended live push.
+ * Copy-on-write: returns `kept` untouched when nothing conflicts (the
+ * fragments are module-scope zod-to-json-schema output shared with xActions).
+ * Descriptions and examples stay first-wins.
+ */
+function dropConflictingDefaults(kept: unknown, incoming: unknown): unknown {
+  if (Array.isArray(kept) && Array.isArray(incoming)) {
+    let changed = false;
+    const out = kept.map((v, i) => {
+      const r = dropConflictingDefaults(v, incoming[i]);
+      if (r !== v) changed = true;
+      return r;
+    });
+    return changed ? out : kept;
+  }
+  if (kept !== null && incoming !== null && typeof kept === "object" && typeof incoming === "object") {
+    const k = kept as Record<string, unknown>;
+    const inc = incoming as Record<string, unknown>;
+    let out: Record<string, unknown> | null = null;
+    if ("default" in k && (!("default" in inc) || !jsonEquals(k.default, inc.default))) {
+      out = { ...k };
+      delete out.default;
+    }
+    for (const key of Object.keys(k)) {
+      if (SHAPE_ANNOTATION_KEYS.has(key)) continue;
+      const r = dropConflictingDefaults(k[key], inc[key]);
+      if (r !== k[key]) {
+        out = out ?? { ...k };
+        out[key] = r;
+      }
+    }
+    return out ?? kept;
+  }
+  return kept;
 }
 
 /**
@@ -240,8 +290,12 @@ export function buildJsonSchemaForActions(actions: ActionDef[]): MegaToolInputSc
         variantsByKey.set(key, variants);
       }
       const existing = variants.find((v) => schemaShapeEquals(v.schema, propSchema));
-      if (existing) existing.actions.push(a.action);
-      else variants.push({ schema: propSchema as Record<string, unknown>, actions: [a.action] });
+      if (existing) {
+        existing.actions.push(a.action);
+        existing.schema = dropConflictingDefaults(existing.schema, propSchema) as Record<string, unknown>;
+      } else {
+        variants.push({ schema: propSchema as Record<string, unknown>, actions: [a.action] });
+      }
     }
   }
   for (const [key, variants] of variantsByKey) {

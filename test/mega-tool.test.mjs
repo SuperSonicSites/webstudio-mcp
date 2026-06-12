@@ -95,6 +95,68 @@ test("buildJsonSchemaForActions: description-only differences do NOT fork an any
   assert.equal(schema.properties.dryRun.description, "doc A");
 });
 
+// ─── annotation-only differences (v2.20.3) ───────────────────────────────────
+// default/examples never change what validates — they must not fork an anyOf
+// either (12 default-only two-variant anyOfs shipped across 10 tools pre-fix).
+
+test("buildJsonSchemaForActions: default-only differences do NOT fork an anyOf; conflicting default is dropped", () => {
+  const schema = buildJsonSchemaForActions([
+    { action: "a", description: "...", schema: { dryRun: { type: "boolean", default: true } }, required: [] },
+    { action: "b", description: "...", schema: { dryRun: { type: "boolean", default: false } }, required: [] },
+  ]);
+  assert.equal(schema.properties.dryRun.type, "boolean");
+  assert.equal(schema.properties.dryRun.anyOf, undefined);
+  // Advertising either default could mislead the other action's caller.
+  assert.equal("default" in schema.properties.dryRun, false);
+});
+
+test("buildJsonSchemaForActions: agreeing defaults survive the merge", () => {
+  const schema = buildJsonSchemaForActions([
+    { action: "a", description: "...", schema: { dryRun: { type: "boolean", default: true } }, required: [] },
+    { action: "b", description: "...", schema: { dryRun: { type: "boolean", default: true } }, required: [] },
+  ]);
+  assert.equal(schema.properties.dryRun.anyOf, undefined);
+  assert.equal(schema.properties.dryRun.default, true);
+});
+
+test("buildJsonSchemaForActions: default present on only one action is dropped on merge", () => {
+  const schema = buildJsonSchemaForActions([
+    { action: "a", description: "...", schema: { dryRun: { type: "boolean", default: true } }, required: [] },
+    { action: "b", description: "...", schema: { dryRun: { type: "boolean" } }, required: [] },
+  ]);
+  assert.equal(schema.properties.dryRun.anyOf, undefined);
+  assert.equal("default" in schema.properties.dryRun, false);
+});
+
+test("buildJsonSchemaForActions: NESTED conflicting defaults are dropped recursively without forking", () => {
+  // Real case: build.pushTo forks two byte-identical object shapes differing
+  // only in a nested dryRun default (push_fragment=false, push_complete=true).
+  const shape = (dryRunDefault) => ({
+    type: "object",
+    properties: { page: { type: "string" }, dryRun: { type: "boolean", default: dryRunDefault } },
+    additionalProperties: false,
+  });
+  const schema = buildJsonSchemaForActions([
+    { action: "push_fragment", description: "...", schema: { pushTo: shape(false) }, required: [] },
+    { action: "push_complete", description: "...", schema: { pushTo: shape(true) }, required: [] },
+  ]);
+  const pushTo = schema.properties.pushTo;
+  assert.equal(pushTo.anyOf, undefined, "default-only nested difference must not fork");
+  assert.equal("default" in pushTo.properties.dryRun, false);
+  assert.equal(pushTo.properties.page.type, "string");
+});
+
+test("buildJsonSchemaForActions: dropConflictingDefaults does not mutate the source action schemas", () => {
+  const a = { dryRun: { type: "boolean", default: true } };
+  const b = { dryRun: { type: "boolean", default: false } };
+  buildJsonSchemaForActions([
+    { action: "a", description: "...", schema: a, required: [] },
+    { action: "b", description: "...", schema: b, required: [] },
+  ]);
+  assert.equal(a.dryRun.default, true, "first action's in-memory schema must keep its default");
+  assert.equal(b.dryRun.default, false);
+});
+
 test("buildJsonSchemaForActions: conflicting shapes for the same key become a nested anyOf tagged per action", () => {
   const labelItems = {
     type: "array",
