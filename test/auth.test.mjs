@@ -67,7 +67,7 @@ test("saveAuth writes JSON to projects/<slug>/webstudio-auth.json", () => {
   assert.deepEqual(onDisk, cfg);
 });
 
-test("saveAuth attempts to write file with 0600 mode (best effort)", () => {
+test("saveAuth attempts to write file with 0600 mode (best effort)", { skip: process.platform === "win32" && "POSIX mode bits are not enforced on Windows" }, () => {
   const slug = freshSlug();
   saveAuth(slug, { projectId: "p", cookie: "c", csrfToken: "t", appVersion: "v" });
   const stat = fs.statSync(authPath(slug));
