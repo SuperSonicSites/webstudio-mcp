@@ -43,10 +43,10 @@ test("summarize: collapses newlines/whitespace to one line", () => {
   assert.equal(summarizeActionDescription(full), "Use when: foo bar.");
 });
 
-test("summarize: hard cap at 220 chars with ellipsis", () => {
+test("summarize: hard cap at 110 chars with ellipsis", () => {
   const long = "Use when: " + "x".repeat(400);
   const out = summarizeActionDescription(long);
-  assert.ok(out.length <= 220, `expected <=220 chars, got ${out.length}`);
+  assert.ok(out.length <= 110, `expected <=110 chars, got ${out.length}`);
   assert.ok(out.endsWith("…"));
 });
 
@@ -98,7 +98,7 @@ test("action enum description carries one-line summaries only", () => {
     },
   ]);
   const desc = schema.properties.action.description;
-  assert.match(desc, /action="create" — Use when: create one\./);
+  assert.match(desc, /^create — Use when: create one\./m);
   assert.doesNotMatch(desc, /Do NOT use when: batch/, "detail must not travel in the enum description");
   // v2.20.3: the get_more_tools pointer moved off the per-tool wire (was ×15)
   // into SERVER_INSTRUCTIONS rule 8 — it must not be re-added here.

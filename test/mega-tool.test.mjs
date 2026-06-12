@@ -213,6 +213,7 @@ test("buildJsonSchemaForActions: action description concatenates per-variant doc
     { action: "a", description: "doc A", schema: {}, required: [] },
     { action: "b", description: "doc B", schema: {}, required: [] },
   ]);
-  assert.match(schema.properties.action.description, /action="a" — doc A/);
-  assert.match(schema.properties.action.description, /action="b" — doc B/);
+  // v2.20.3: bare `name — summary` lines (no action="" prefix) in the enum.
+  assert.match(schema.properties.action.description, /^a — doc A$/m);
+  assert.match(schema.properties.action.description, /^b — doc B$/m);
 });

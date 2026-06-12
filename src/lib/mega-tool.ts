@@ -86,7 +86,11 @@ const DESCRIPTION_DETAIL_MARKERS = [
   " [PATTERN]",
 ];
 
-const SUMMARY_HARD_CAP = 220;
+// v2.20.3: 110 (was 220) — the joined summary lines are the single largest
+// prose block on the wire (~23 kB across 108 actions at the old cap). Leads
+// longer than the cap get ellipsis-truncated; keep "Use when:" leads ≤~100
+// chars in the action definitions so nothing truncates mid-thought.
+const SUMMARY_HARD_CAP = 110;
 
 /**
  * Compress a full action description to its one-line lead for the wire schema.
@@ -94,7 +98,7 @@ const SUMMARY_HARD_CAP = 220;
  * - Cuts at the first canonical detail marker (Do NOT use when / Returns /
  *   Side effects / Example) — the "Use when:" lead must be self-sufficient.
  * - Short free-form descriptions (no markers) pass through unchanged.
- * - Hard cap at 220 chars as a backstop for non-canonical descriptions.
+ * - Hard cap at SUMMARY_HARD_CAP chars as a backstop for long leads.
  * - The "CRITICAL — context required" safety marker is always preserved (the
  *   agent must see it BEFORE calling, not after a CONTEXT_REQUIRED error).
  *
@@ -250,8 +254,11 @@ export function buildJsonSchemaForActions(actions: ActionDef[]): MegaToolInputSc
   // Per-tool wire prose is paid ×15 every session — keep these descriptions
   // one line each; the full context policy and the get_more_tools pointer live
   // once in SERVER_INSTRUCTIONS (src/index.ts).
+  // Bare `name — summary` lines (the action="..." prefix cost ~1 kB over 108
+  // actions). NOTE: the action="..." tags inside anyOf VARIANT descriptions
+  // (see below) are load-bearing for variant→action mapping and keep the prefix.
   const actionDescription = actions
-    .map((a) => `action="${a.action}" — ${summarizeActionDescription(a.description)}`)
+    .map((a) => `${a.action} — ${summarizeActionDescription(a.description)}`)
     .join("\n");
   const properties: Record<string, object> = {
     action: { type: "string", enum: actionEnum, description: actionDescription },
