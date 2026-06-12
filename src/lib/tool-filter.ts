@@ -10,9 +10,22 @@
 //   - names are trimmed + case-insensitive;
 //   - "meta" is ALWAYS kept (discovery is core; meta.index reflects the
 //     filtered list via its closure);
+//   - named PRESETS (v2.21.0) expand before per-name matching and compose
+//     with explicit names ("readonly,assets" = the readonly trio + assets);
 //   - unknown names are reported (caller prints them on stderr);
 //   - active filter matching ZERO known tools → fail-safe: keep meta only.
 //     Serving the full surface on a typo would defeat the safety use case.
+
+// Named profiles for common deployment modes. Keep these aligned with the
+// README's "Reduced tool surface" section.
+export const TOOL_FILTER_PRESETS: Record<string, string[]> = {
+  /** Safe crawl/audit instance — no mutation tools. */
+  readonly: ["meta", "read", "audit"],
+  /** Copy/content editing — text, styles, tokens, CMS; no fragment pushes. */
+  content: ["meta", "read", "styles", "tokens", "instances", "cms"],
+  /** Section building — fragment construction + instance tree + styling. */
+  builder: ["meta", "read", "build", "instances", "styles", "tokens"],
+};
 
 export type ToolFilterResult = {
   /** False when the env var is unset/empty — register everything. */
@@ -34,7 +47,10 @@ export function applyToolFilter(
   const wanted = raw
     .split(",")
     .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
+    .filter(Boolean)
+    // Preset expansion happens before name matching, so presets compose with
+    // explicit names and with each other.
+    .flatMap((w) => TOOL_FILTER_PRESETS[w] ?? [w]);
   const byLower = new Map(knownToolNames.map((n) => [n.toLowerCase(), n]));
   const keep = new Set<string>();
   const unknown: string[] = [];

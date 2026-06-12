@@ -50,6 +50,33 @@ test("all-unknown filter → keep is empty (fail-safe: caller registers meta onl
   assert.deepEqual(r.unknown, ["bogus", "nope"]);
 });
 
+// ── named presets (v2.21.0) ─────────────────────────────────────────────────
+
+test("preset 'readonly' expands to meta+read+audit", () => {
+  const r = applyToolFilter(KNOWN, "readonly");
+  assert.equal(r.active, true);
+  assert.deepEqual([...r.keep].sort(), ["audit", "read"]);
+  assert.deepEqual(r.unknown, []);
+});
+
+test("presets are case-insensitive", () => {
+  const r = applyToolFilter(KNOWN, " ReadOnly ");
+  assert.deepEqual([...r.keep].sort(), ["audit", "read"]);
+});
+
+test("presets compose with explicit names", () => {
+  const r = applyToolFilter(KNOWN, "readonly,tokens");
+  assert.deepEqual([...r.keep].sort(), ["audit", "read", "tokens"]);
+  assert.deepEqual(r.unknown, []);
+});
+
+test("preset members unknown to this server are reported, not fatal", () => {
+  // 'builder' includes instances/styles which are not in KNOWN here.
+  const r = applyToolFilter(KNOWN, "builder");
+  assert.deepEqual([...r.keep].sort(), ["build", "read", "tokens"]);
+  assert.deepEqual(r.unknown.sort(), ["instances", "styles"]);
+});
+
 // ── end-to-end: real server with the filter active ──────────────────────────
 
 function fetchToolsList(env) {
@@ -87,6 +114,12 @@ function fetchToolsList(env) {
 
 test("WEBSTUDIO_MCP_TOOLS=read,audit → server registers exactly meta+read+audit", async () => {
   const result = await fetchToolsList({ WEBSTUDIO_MCP_TOOLS: "read,audit" });
+  const names = result.tools.map((t) => t.name).sort();
+  assert.deepEqual(names, ["audit", "meta", "read"]);
+});
+
+test("WEBSTUDIO_MCP_TOOLS=readonly (preset) → same surface as meta+read+audit", async () => {
+  const result = await fetchToolsList({ WEBSTUDIO_MCP_TOOLS: "readonly" });
   const names = result.tools.map((t) => t.name).sort();
   assert.deepEqual(names, ["audit", "meta", "read"]);
 });

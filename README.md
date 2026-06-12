@@ -113,8 +113,9 @@ All optional — the defaults fit interactive agent sessions.
 
 | Variable | Default | Effect |
 |---|---|---|
-| `WEBSTUDIO_MCP_TOOLS` | unset (full surface) | Comma-separated list of mega-tools to register, e.g. `meta,read,audit`. `meta` is always included. Unknown names are ignored with a stderr warning; a filter matching nothing fail-safes to `meta` only. Use it for read-only routines: safety (no mutation tools mounted) + a ~3× cheaper handshake. |
-| `WEBSTUDIO_MCP_BUILD_CACHE_TTL_MS` | `30000` | TTL of the in-memory project-build cache. `0` disables it (every read re-fetches — useful when debugging alongside live edits in the builder). |
+| `WEBSTUDIO_MCP_TOOLS` | unset (full surface) | Comma-separated mega-tools to register, e.g. `meta,read,audit`, or a named preset: `readonly` (meta,read,audit), `content` (meta,read,styles,tokens,instances,cms), `builder` (meta,read,build,instances,styles,tokens). Presets compose with explicit names (`readonly,assets`). `meta` is always included. Unknown names warn on stderr; a filter matching nothing fail-safes to `meta` only. Read-only routines get safety (no mutation tools mounted) + a ~7× cheaper handshake. |
+| `WEBSTUDIO_MCP_RESOURCES` | unset (enabled) | `0` disables the MCP pattern resources (the 42-entry `resources/list`, ~6.6 kB per session). Patterns stay reachable via `meta.list_patterns` / `meta.describe_pattern`. Recommended for secondary read-only instances: `WEBSTUDIO_MCP_TOOLS=readonly` + `WEBSTUDIO_MCP_RESOURCES=0`. |
+| `WEBSTUDIO_MCP_BUILD_CACHE_TTL_MS` | `120000` | TTL of the in-memory project-build cache. `0` disables it (every read re-fetches — useful when debugging alongside live edits in the builder). |
 | `WEBSTUDIO_MCP_TELEMETRY` | unset (off) | `1` enables JSONL telemetry (tool calls, coerces, build-cache hit/miss). |
 | `WEBSTUDIO_MCP_TELEMETRY_PATH` | `~/.webstudio-mcp-telemetry.jsonl` | Telemetry output path. |
 
