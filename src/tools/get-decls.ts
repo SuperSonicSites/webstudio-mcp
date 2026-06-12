@@ -218,7 +218,7 @@ export const getDeclsTool: ToolModule = {
     catch (err) { return authErrorResult(err); }
 
     let build: WebstudioBuild;
-    try { build = await fetchBuild(auth); }
+    try { build = await fetchBuild(auth, { readonly: true }); }
     catch (err) { return runtimeErrorResult(err, "fetch build failed"); }
 
     let targetIds: string[] = [];

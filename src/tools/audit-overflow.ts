@@ -77,7 +77,7 @@ Read-only.`,
 
     let build: WebstudioBuild;
     try {
-      build = await fetchBuild(auth);
+      build = await fetchBuild(auth, { readonly: true });
     } catch (err) {
       return runtimeErrorResult(err, "fetch build failed");
     }

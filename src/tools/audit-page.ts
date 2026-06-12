@@ -94,7 +94,7 @@ Example: { projectSlug: "acme", pageId: "p1", allowedPrefix: "acme-", flagDashes
     catch (err) { return authErrorResult(err); }
 
     let build;
-    try { build = await fetchBuild(auth); }
+    try { build = await fetchBuild(auth, { readonly: true }); }
     catch (err) { return runtimeErrorResult(err, "fetch build failed"); }
 
     const page = build.pages.pages.find((p) => p.id === pageId || p.path === pagePath);

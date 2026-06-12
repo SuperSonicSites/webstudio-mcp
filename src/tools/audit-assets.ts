@@ -68,7 +68,7 @@ fullIds=true to get untruncated sha256 ids (usable as-is for delete_asset). Read
     catch (err) { return authErrorResult(err); }
 
     let build;
-    try { build = await fetchBuild(auth); }
+    try { build = await fetchBuild(auth, { readonly: true }); }
     catch (err) { return runtimeErrorResult(err, "fetch build failed"); }
 
     const assets = getAssets(build);

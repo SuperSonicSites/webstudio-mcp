@@ -140,7 +140,7 @@ Returns a markdown report with one entry per polluted instance + the suggested m
     catch (err) { return authErrorResult(err); }
 
     let build;
-    try { build = await fetchBuild(auth); }
+    try { build = await fetchBuild(auth, { readonly: true }); }
     catch (err) { return runtimeErrorResult(err, "fetch build failed"); }
 
     const wrappers = build.instances.filter((i) => isNonRenderingWrapper(i.component));

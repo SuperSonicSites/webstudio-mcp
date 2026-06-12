@@ -238,7 +238,26 @@ export function invalidateBuildCache(projectId?: string): void {
 export type FetchBuildOptions = {
   /** Bypass the cache and hit the network (push/retry paths). Default false. */
   fresh?: boolean;
+  /**
+   * Return the cached build deep-frozen, WITHOUT cloning (v2.20.2). Pure-read
+   * tools should opt in: a structuredClone of a multi-MB build per cache hit
+   * is the single largest per-call CPU cost on read chains. Frozen objects
+   * turn latent cache-corrupting mutations into loud TypeErrors (strict-mode
+   * ESM). Readonly returns are frozen even when the cache is disabled so the
+   * guarantee does not depend on TTL configuration. Default false.
+   */
+  readonly?: boolean;
 };
+
+/** Recursive Object.freeze (Object.freeze alone is shallow). Cycle-safe via frozen-check. */
+function deepFreeze<T>(value: T): T {
+  if (value === null || typeof value !== "object" || Object.isFrozen(value)) return value;
+  Object.freeze(value);
+  for (const key of Object.getOwnPropertyNames(value)) {
+    deepFreeze((value as Record<string, unknown>)[key]);
+  }
+  return value;
+}
 
 export async function fetchBuild(
   config: WebstudioConfig,
@@ -250,7 +269,10 @@ export async function fetchBuild(
       // Telemetry (opt-in): hit/miss ratio feeds the weekly report — tells us
       // whether the TTL default is calibrated for real agent workflows.
       void logTelemetry({ event: "build_cache", hit: true, projectId: config.projectId });
-      return structuredClone(cached.build);
+      // The stored copy is deep-frozen at store time; readonly callers share
+      // it directly. structuredClone of a frozen object yields a mutable clone,
+      // so non-readonly callers are unaffected.
+      return opts.readonly ? cached.build : structuredClone(cached.build);
     }
   }
   void logTelemetry({ event: "build_cache", hit: false, fresh: opts.fresh === true, projectId: config.projectId });
@@ -265,9 +287,11 @@ export async function fetchBuild(
   }
   const build = (await res.json()) as WebstudioBuild;
   if (BUILD_CACHE_TTL_MS > 0) {
-    buildCache.set(config.projectId, { build: structuredClone(build), fetchedAt: Date.now() });
+    const stored = deepFreeze(structuredClone(build));
+    buildCache.set(config.projectId, { build: stored, fetchedAt: Date.now() });
+    if (opts.readonly) return stored;
   }
-  return build;
+  return opts.readonly ? deepFreeze(build) : build;
 }
 
 export async function applyTransaction(

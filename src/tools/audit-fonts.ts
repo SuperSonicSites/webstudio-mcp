@@ -75,7 +75,7 @@ verbose=true expands per-section lists (else top 20). Read-only.`,
     catch (err) { return authErrorResult(err); }
 
     let build;
-    try { build = await fetchBuild(auth); }
+    try { build = await fetchBuild(auth, { readonly: true }); }
     catch (err) { return runtimeErrorResult(err, "fetch build failed"); }
 
     try {

@@ -131,7 +131,7 @@ sort: usage-asc (default) | usage-desc | name. Read-only.`,
     catch (err) { return authErrorResult(err); }
 
     let build;
-    try { build = await fetchBuild(auth); }
+    try { build = await fetchBuild(auth, { readonly: true }); }
     catch (err) { return runtimeErrorResult(err, "fetch build failed"); }
 
     const r = buildReport(build, data);

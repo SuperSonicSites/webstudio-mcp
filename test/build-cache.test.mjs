@@ -122,6 +122,35 @@ test("pushWithRetry: version_mismatched retry forces a FRESH fetch", async () =>
   assert.equal(restCalls, 2);
 });
 
+// ── readonly fetches (v2.20.2 — frozen shared reference, no per-hit clone) ──
+
+test("fetchBuild readonly: cache hit returns the same deep-frozen reference (no clone)", async () => {
+  const a = await fetchBuild(CONFIG, { readonly: true });
+  const b = await fetchBuild(CONFIG, { readonly: true });
+  assert.equal(restCalls, 1);
+  assert.equal(a, b, "readonly hits must share one reference");
+  assert.ok(Object.isFrozen(a), "top level frozen");
+  assert.ok(Object.isFrozen(a.instances), "arrays frozen");
+  assert.ok(Object.isFrozen(a.instances[0]), "nested objects frozen");
+  assert.throws(() => { a.version = 999; }, TypeError, "mutation must throw in strict mode");
+});
+
+test("fetchBuild readonly: non-readonly callers still get a mutable clone", async () => {
+  await fetchBuild(CONFIG, { readonly: true });
+  const mutable = await fetchBuild(CONFIG);
+  assert.equal(restCalls, 1, "both served from cache");
+  mutable.instances.push({ id: "extra", type: "instance", component: "Box", children: [] });
+  assert.equal(mutable.instances.length, 2);
+  const ro = await fetchBuild(CONFIG, { readonly: true });
+  assert.equal(ro.instances.length, 1, "mutation of a clone must not reach the shared copy");
+});
+
+test("fetchBuild readonly: miss path also returns a frozen build", async () => {
+  const a = await fetchBuild(CONFIG, { readonly: true });
+  assert.equal(restCalls, 1, "miss path fetched");
+  assert.ok(Object.isFrozen(a));
+});
+
 // ── retryDelayMs (v2.14.1 — exponential backoff + jitter on push retries) ───
 
 test("retryDelayMs: attempt 0 has no delay, then exponential with bounded jitter", async () => {

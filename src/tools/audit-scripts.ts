@@ -80,7 +80,7 @@ TikTok, HubSpot). verbose=true expands the inline/CSS lists. Read-only.`,
     catch (err) { return authErrorResult(err); }
 
     let build: WebstudioBuild;
-    try { build = await fetchBuild(auth); }
+    try { build = await fetchBuild(auth, { readonly: true }); }
     catch (err) { return runtimeErrorResult(err, "fetch build failed"); }
 
     const sources: HtmlSource[] = [

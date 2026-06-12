@@ -65,7 +65,7 @@ Read-only — no push. Pair with delete_variable / delete_asset / delete_token /
     catch (err) { return authErrorResult(err); }
 
     let build;
-    try { build = await fetchBuild(auth); }
+    try { build = await fetchBuild(auth, { readonly: true }); }
     catch (err) { return runtimeErrorResult(err, "fetch build failed"); }
 
     const picked: CategoryT[] =

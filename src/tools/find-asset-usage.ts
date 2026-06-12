@@ -55,7 +55,7 @@ Example: { projectSlug: "my-site", assetName: "old-logo" }`,
     catch (err) { return authErrorResult(err); }
 
     let build;
-    try { build = await fetchBuild(auth); }
+    try { build = await fetchBuild(auth, { readonly: true }); }
     catch (err) { return runtimeErrorResult(err, "fetch build failed"); }
 
     let asset = input.assetId ? findAssetById(build, input.assetId) : undefined;
