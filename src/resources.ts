@@ -4,9 +4,9 @@
 // only accessible via the webstudio_describe_pattern tool. With resources://, the LLM
 // can cite them passively without a tool call — same approach as Notion v2 / Linear MCPs.
 
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { findPatternsDir } from "./lib/patterns-dir.js";
 
 export type PatternResource = {
   slug: string;
@@ -22,21 +22,6 @@ export type PatternResource = {
   mimeType: string;
   path: string;
 };
-
-function findPatternsDir(): string | null {
-  const here = dirname(fileURLToPath(import.meta.url));
-  const candidates = [
-    resolve(here, "../docs/patterns"),     // dist/resources.js → repo root
-    resolve(here, "../../docs/patterns"),  // src/resources.ts via ts-node
-    resolve(process.cwd(), "docs/patterns"),
-  ];
-  for (const p of candidates) {
-    try {
-      if (statSync(p).isDirectory()) return p;
-    } catch { /* skip */ }
-  }
-  return null;
-}
 
 function extractFrontmatter(body: string): {
   name?: string;

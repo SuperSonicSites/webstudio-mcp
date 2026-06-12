@@ -7,9 +7,9 @@
 // Add a new pattern by dropping a .md file into /docs/patterns/. The slug = filename without .md.
 // Frontmatter is optional — if present, the first H1 or `name:` field is used for the index display.
 
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { findPatternsDir } from "../../lib/patterns-dir.js";
 
 export type LongPatternDoc = {
   slug: string;
@@ -17,25 +17,6 @@ export type LongPatternDoc = {
   description: string; // first paragraph after frontmatter, truncated
   body: string; // full markdown
 };
-
-function findPatternsDir(): string | null {
-  // dist/tools/describe-pattern/long-patterns.js → repo root is 3 levels up
-  // src/tools/describe-pattern/long-patterns.ts → repo root is 3 levels up
-  const here = dirname(fileURLToPath(import.meta.url));
-  const candidates = [
-    resolve(here, "../../../docs/patterns"),
-    resolve(here, "../../../../docs/patterns"),
-    resolve(process.cwd(), "docs/patterns"),
-  ];
-  for (const p of candidates) {
-    try {
-      if (statSync(p).isDirectory()) return p;
-    } catch {
-      // skip
-    }
-  }
-  return null;
-}
 
 function parseFrontmatter(raw: string): { meta: Record<string, string>; body: string } {
   const m = raw.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
