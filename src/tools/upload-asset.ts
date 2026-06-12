@@ -12,7 +12,7 @@ import { createHash } from "node:crypto";
 import type { ToolModule } from "./types.js";
 import { textResult, errorResult, authErrorResult } from "./types.js";
 import { requireAuth, requirePushAuth } from "../auth.js";
-import { fetchBuild } from "../webstudio-client.js";
+import { fetchBuild, invalidateBuildCache } from "../webstudio-client.js";
 import { findAssetById } from "../lib/asset-helpers.js";
 import { MIME_TO_TYPE, detectMime } from "./upload-asset/mime.js";
 import { resolveBuffer } from "./upload-asset/io.js";
@@ -137,6 +137,12 @@ If OK, re-run with dryRun=false to upload.`);
     } catch (err) {
       return authErrorResult(err);
     }
+
+    // Server state is about to change (or may change even on failure — outcome
+    // unknown on thrown errors): drop the cached build before the first POST,
+    // mirroring applyTransaction. Otherwise reads within the cache TTL
+    // (replace_asset, pages.update_meta, dedupe) can't see the new asset.
+    invalidateBuildCache(auth.projectId);
 
     const reg = await registerAsset(auth, assetId, assetType, filename);
     if (!reg.ok) return reg.result;
