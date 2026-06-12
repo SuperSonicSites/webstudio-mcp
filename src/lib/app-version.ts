@@ -53,9 +53,22 @@ function parseCookiesForUrl(cookieHeader: string, url: string) {
  * F12 instructions.
  */
 export async function fetchAppVersionViaBrowser(projectId: string, cookie: string): Promise<string> {
-  // Lazy import: keep webstudio-client.ts free of a hard playwright dep at
-  // module load (mock-fetch tests don't pull this in).
-  const { chromium } = await import("playwright-core");
+  // Lazy import: playwright-core is an OPTIONAL dependency since v2.21.0 and
+  // is resolved from the consumer's node_modules (external in the bundle).
+  // Distinct failure layers: module missing (here) vs Chromium binary missing
+  // (below) — keep the messages distinguishable.
+  let chromium: (typeof import("playwright-core"))["chromium"];
+  try {
+    ({ chromium } = await import("playwright-core"));
+  } catch {
+    throw new Error(
+      "playwright-core is not installed (optional since v2.21.0). The primary HTML-based " +
+        "version detection already failed if you are reading this; to enable the browser " +
+        "fallback, launch with `npx -y -p playwright-core -p @densrt/webstudio-mcp webstudio-mcp` " +
+        "or `npm i playwright-core` in the server's working directory — or update the version " +
+        "manually via auth.update_app_version (grab x-webstudio-client-version from DevTools).",
+    );
+  }
 
   const executablePath = await findChromiumBinary();
   if (!executablePath) {

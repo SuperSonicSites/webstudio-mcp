@@ -19,11 +19,24 @@ import { join } from "node:path";
 import type { chromium } from "playwright-core";
 import { z } from "zod";
 
-// playwright-core is a heavy module (~1.1s import, measured 2026-06-10 — half
-// of the total server boot). Loaded lazily so the MCP server only pays for it
-// when read.snapshot is actually invoked (same pattern as lib/app-version.ts).
+// playwright-core is an OPTIONAL runtime dependency since v2.21.0 (it was 43%
+// of the installed bytes for a feature most sessions never touch). It stays a
+// devDependency for the type-only import above and is marked external in the
+// bundle, so this dynamic import resolves from the CONSUMER's node_modules.
 async function loadChromium(): Promise<typeof chromium> {
-  const mod = await import("playwright-core");
+  let mod: typeof import("playwright-core");
+  try {
+    mod = await import("playwright-core");
+  } catch {
+    throw new Error(
+      "playwright-core is not installed (optional since v2.21.0 — it tripled the install size). " +
+        "To enable snapshots, launch with it on the module path: " +
+        "`npx -y -p playwright-core -p @densrt/webstudio-mcp webstudio-mcp`, " +
+        "or run `npm i playwright-core` in the directory the server starts from. " +
+        "(`npm i -g` does NOT work — ESM resolution never searches the global tree.) " +
+        "Then install the browser once: `npx playwright install chromium`.",
+    );
+  }
   return mod.chromium;
 }
 
