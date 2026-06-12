@@ -5,6 +5,30 @@ privately before its first public release, so the history below starts at the fi
 public version. Format inspired by [Keep a Changelog](https://keepachangelog.com/),
 versioning per [SemVer](https://semver.org/).
 
+## [2.20.2] — 2026-06-11
+
+- fix(assets): asset uploads now invalidate the build cache before the first
+  /rest/assets POST. Previously, for up to a full cache TTL after assets.upload,
+  replace_asset rejected the just-uploaded assetId, pages.update_meta validated
+  against a stale asset list, and upload dedupe re-uploaded bytes it already had.
+  Regression tests: test/upload-cache-invalidation.test.mjs.
+- perf(cache): default build-cache TTL raised 30s → 120s. The server sends
+  `Cache-Control: private, no-store` and no ETag, so the in-process TTL is the
+  only read-dedup lever; every mutation path (pushes, asset uploads) invalidates
+  eagerly and push retries always re-fetch fresh. Override via
+  WEBSTUDIO_MCP_BUILD_CACHE_TTL_MS (0 disables).
+- perf(cache): pure-read tools (13 audit actions, get_decls, inspect,
+  list_instances, read_texts, list_assets, find_asset_usage, project.export)
+  now share one deep-frozen cached build instead of paying a full
+  structuredClone per cache hit (~25 ms/hit on a 1 MB build, scales with
+  project size). Frozen objects turn latent cache-corrupting mutations into
+  loud TypeErrors; mutation-path reads keep receiving mutable clones.
+- fix(patterns): pattern docs are read CRLF-tolerantly. On Windows checkouts
+  (git autocrlf) the LF-only frontmatter regex never matched, so all 42
+  patterns lost name/description/recommendedTool metadata — resources/list
+  shipped fallback slices and meta.guide could not map patterns to tools.
+  Packing/publishing from a Windows tree would have shipped the broken files.
+
 ## [2.20.1] — 2026-06-11
 
 - fix(schema): instances.update_text (and every action sharing a param name with a
