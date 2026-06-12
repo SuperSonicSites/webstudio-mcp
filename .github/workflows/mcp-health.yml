@@ -29,8 +29,17 @@ jobs:
       - name: Run tests
         run: npm test
 
+      - name: Bundle (single-file artifact shipped to npm)
+        run: npm run bundle
+
+      - name: Bundle smoke — stdio handshake serves tools + pattern resources
+        run: node scripts/smoke-bundle.mjs
+
       - name: Measure baseline metrics
         run: node scripts/measure-baseline.mjs | tee baseline.txt
+
+      - name: Measure wire payload
+        run: node scripts/measure-wire.mjs | tee -a baseline.txt
 
       - name: Quota — mega-tools in manifest <= 22 (Webflow alignment)
         run: |

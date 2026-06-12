@@ -3,17 +3,18 @@
   "version": "2.20.3",
   "description": "Unofficial MCP server for Webstudio Cloud — generate, push, audit, and refactor Webstudio projects programmatically (for AI agents and CLI workflows).",
   "type": "module",
-  "main": "dist/index.js",
+  "main": "bundle/index.js",
   "bin": {
-    "webstudio-mcp": "dist/index.js"
+    "webstudio-mcp": "bundle/index.js"
   },
   "files": [
-    "dist",
+    "bundle",
     "docs",
     "README.md",
     "LICENSE",
     "CHANGELOG.md",
-    "SECURITY.md"
+    "SECURITY.md",
+    "THIRD_PARTY_NOTICES.md"
   ],
   "engines": {
     "node": ">=20"
@@ -21,11 +22,12 @@
   "scripts": {
     "clean": "node scripts/clean.mjs",
     "build": "npm run clean && tsc",
+    "bundle": "node scripts/bundle.mjs",
     "dev": "node --watch --loader ts-node/esm src/index.ts",
-    "start": "node dist/index.js",
+    "start": "node bundle/index.js",
     "test": "node --test test/*.test.mjs",
     "bump": "node scripts/bump.mjs",
-    "prepack": "npm run build"
+    "prepack": "npm run build && npm run bundle"
   },
   "keywords": [
     "webstudio",
@@ -59,6 +61,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "esbuild": "^0.28.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.0.0"
   }

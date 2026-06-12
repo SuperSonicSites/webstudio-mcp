@@ -8,3 +8,4 @@
 import { rmSync } from "node:fs";
 
 rmSync("dist", { recursive: true, force: true });
+rmSync("bundle", { recursive: true, force: true });

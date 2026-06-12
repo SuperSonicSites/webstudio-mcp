@@ -1,5 +1,6 @@
 node_modules/
 dist/
+bundle/
 *.tsbuildinfo
 
 # Webstudio Cloud auth (per-project cookies + CSRF tokens — NEVER commit)
